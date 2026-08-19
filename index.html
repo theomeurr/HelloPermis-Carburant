@@ -5,23 +5,27 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Suivi Carburant — HelloPermis</title>
   <meta name="description" content="Suivi du carburant des véhicules de l'auto-école : véhicules, moniteurs, pleins, exports CSV et Excel.">
-  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Ctext y='0.9em' font-size='90'%3E%E2%9B%BD%3C/text%3E%3C/svg%3E">
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Crect width='100' height='100' rx='24' fill='%2316181a'/%3E%3Ctext x='50' y='55' dominant-baseline='middle' text-anchor='middle' font-family='ui-monospace,monospace' font-weight='700' font-size='42' fill='%23ffffff'%3EHP%3C/text%3E%3C/svg%3E">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Public+Sans:ital,wght@0,400;0,500;0,600;0,700;0,800&family=IBM+Plex+Mono:wght@500;600&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="styles.css">
 </head>
 <body>
+<div class="app">
 
   <header class="app-header">
     <div class="container header-inner">
       <div class="brand">
-        <span class="brand-icon" aria-hidden="true">⛽</span>
+        <span class="brand-icon" aria-hidden="true">HP</span>
         <div>
           <h1>Suivi carburant</h1>
           <p class="brand-sub">HelloPermis · Auto-école</p>
         </div>
       </div>
       <nav class="tabs" role="tablist" aria-label="Navigation">
-        <button type="button" class="tab active" data-view="suivi" role="tab" aria-selected="true">⛽ Suivi des pleins</button>
-        <button type="button" class="tab" data-view="base" role="tab" aria-selected="false">🗂️ Base de renseignements</button>
+        <button type="button" class="tab active" data-view="suivi" role="tab" aria-selected="true">Suivi des pleins</button>
+        <button type="button" class="tab" data-view="base" role="tab" aria-selected="false">Base de renseignements</button>
       </nav>
     </div>
   </header>
@@ -32,7 +36,7 @@
     <section id="view-suivi" class="view">
 
       <div id="no-vehicle-notice" class="notice hidden">
-        <span>🚗 Commencez par ajouter un véhicule pour pouvoir enregistrer un plein.</span>
+        <span>Commencez par ajouter un véhicule pour pouvoir enregistrer un plein.</span>
         <button type="button" class="btn btn-primary btn-sm" id="notice-add-vehicle">Ajouter un véhicule</button>
       </div>
 
@@ -80,7 +84,6 @@
             <label class="tva-inline" for="fill-tva">TVA
               <input type="number" id="fill-tva" min="0" max="100" step="0.1" value="20"> %
             </label>
-            <p class="form-hint">💡 Totaux TTC et HT calculés automatiquement (modifiables) · le moniteur se préremplit avec celui attitré au véhicule.</p>
           </div>
         </form>
       </section>
@@ -94,45 +97,52 @@
           <select id="filter-moniteur" aria-label="Filtrer par moniteur">
             <option value="">Tous les moniteurs</option>
           </select>
-          <input type="month" id="filter-month" aria-label="Filtrer par mois">
-          <button type="button" class="link-btn hidden" id="filter-reset">✕ Réinitialiser</button>
+          <div class="month-stepper">
+            <button type="button" class="step-btn" id="month-prev" aria-label="Mois précédent">&#8249;</button>
+            <span class="month-label" id="month-label">Mois</span>
+            <button type="button" class="step-btn" id="month-next" aria-label="Mois suivant">&#8250;</button>
+            <select id="filter-month" class="sr-only" aria-label="Filtrer par mois" tabindex="-1"></select>
+          </div>
+          <button type="button" class="link-btn hidden" id="filter-reset">Réinitialiser</button>
         </div>
         <div class="toolbar-exports">
-          <button type="button" class="btn btn-secondary" id="toggle-chart" aria-pressed="false" title="Afficher ou masquer le graphique des dépenses par mois">📊 Analyse</button>
-          <button type="button" class="btn btn-secondary" id="export-csv" title="Exporter les pleins affichés au format CSV">📥 Export CSV</button>
-          <button type="button" class="btn btn-secondary" id="export-xlsx" title="Exporter les pleins affichés au format Excel">📥 Export Excel</button>
-        </div>
-      </section>
-
-      <section class="stats" aria-label="Résumé">
-        <div class="stat">
-          <div class="stat-label">Pleins</div>
-          <div class="stat-value" id="stat-count">0</div>
-        </div>
-        <div class="stat">
-          <div class="stat-label">Litres</div>
-          <div class="stat-value" id="stat-litres">0 L</div>
-        </div>
-        <div class="stat">
-          <div class="stat-label">Total HT</div>
-          <div class="stat-value" id="stat-ht">0,00 €</div>
-        </div>
-        <div class="stat">
-          <div class="stat-label">Total TTC</div>
-          <div class="stat-value" id="stat-ttc">0,00 €</div>
+          <button type="button" class="btn btn-secondary" id="toggle-chart" aria-pressed="false" title="Afficher ou masquer le graphique des dépenses par mois">Analyse</button>
+          <button type="button" class="btn btn-secondary" id="export-csv" title="Exporter les pleins affichés au format CSV">Export CSV</button>
+          <button type="button" class="btn btn-secondary" id="export-xlsx" title="Exporter les pleins affichés au format Excel">Export Excel</button>
         </div>
       </section>
 
       <section class="card chart-card hidden" id="chart-card">
-        <div class="chart-head">
-          <h2>Dépenses par mois <span class="chart-sub">(TTC)</span></h2>
-          <div class="chart-legend" id="chart-legend"></div>
+        <section class="stats" aria-label="Résumé">
+          <div class="stat">
+            <div class="stat-label">Pleins</div>
+            <div class="stat-value" id="stat-count">0</div>
+          </div>
+          <div class="stat">
+            <div class="stat-label">Litres</div>
+            <div class="stat-value" id="stat-litres">0 L</div>
+          </div>
+          <div class="stat">
+            <div class="stat-label">Total HT</div>
+            <div class="stat-value" id="stat-ht">0,00 €</div>
+          </div>
+          <div class="stat">
+            <div class="stat-label">Total TTC</div>
+            <div class="stat-value" id="stat-ttc">0,00 €</div>
+          </div>
+        </section>
+        <div id="chart-body">
+          <div class="chart-head">
+            <h2>Dépenses par mois <span class="chart-sub">(TTC)</span></h2>
+            <div class="chart-legend" id="chart-legend"></div>
+          </div>
+          <p class="chart-note hidden" id="chart-note">Affichage limité aux 12 derniers mois — exportez pour l'historique complet.</p>
+          <div class="chart-wrap">
+            <div id="chart-svg"></div>
+            <div class="chart-tip hidden" id="chart-tip"></div>
+          </div>
         </div>
-        <p class="chart-note hidden" id="chart-note">Affichage limité aux 12 derniers mois — exportez pour l'historique complet.</p>
-        <div class="chart-wrap">
-          <div id="chart-svg"></div>
-          <div class="chart-tip hidden" id="chart-tip"></div>
-        </div>
+        <p class="empty hidden" id="chart-empty">Aucune donnée sur la période sélectionnée.</p>
       </section>
 
       <section class="card table-card">
@@ -163,7 +173,7 @@
     <!-- ============ VUE : BASE DE RENSEIGNEMENTS (véhicules + moniteurs) ============ -->
     <section id="view-base" class="view hidden">
 
-      <h2 class="section-heading">🚗 Véhicules</h2>
+      <h2 class="section-heading">Véhicules</h2>
 
       <section class="card">
         <h2 id="vehicle-form-title">Ajouter un véhicule</h2>
@@ -226,10 +236,10 @@
             <tbody id="vehicles-tbody"></tbody>
           </table>
         </div>
-        <p class="empty hidden" id="vehicles-empty">Aucun véhicule. Ajoutez votre première voiture ci-dessus. 🚗</p>
+        <p class="empty hidden" id="vehicles-empty">Aucun véhicule. Ajoutez votre première voiture ci-dessus.</p>
       </section>
 
-      <h2 class="section-heading">👤 Moniteurs</h2>
+      <h2 class="section-heading">Moniteurs</h2>
 
       <section class="card">
         <h2 id="moniteur-form-title">Ajouter un moniteur</h2>
@@ -243,7 +253,6 @@
           <div class="form-actions">
             <button type="submit" class="btn btn-primary" id="moniteur-submit">Ajouter le moniteur</button>
             <button type="button" class="btn btn-secondary hidden" id="moniteur-cancel">Annuler</button>
-            <p class="form-hint">👤 Les moniteurs ajoutés ici peuvent être attitrés à un véhicule et apparaissent dans la liste « Moniteur » du formulaire de plein.</p>
           </div>
         </form>
       </section>
@@ -262,7 +271,7 @@
             <tbody id="moniteurs-tbody"></tbody>
           </table>
         </div>
-        <p class="empty hidden" id="moniteurs-empty">Aucun moniteur. Ajoutez le premier ci-dessus. 👤</p>
+        <p class="empty hidden" id="moniteurs-empty">Aucun moniteur. Ajoutez le premier ci-dessus.</p>
       </section>
 
     </section>
@@ -271,10 +280,9 @@
 
   <footer class="app-footer">
     <div class="container footer-inner">
-      <span>💾 Les données sont enregistrées automatiquement dans ce navigateur.</span>
       <span class="footer-actions">
-        <button type="button" class="link-btn" id="backup-save">💾 Sauvegarder les données</button>
-        <button type="button" class="link-btn" id="backup-restore">♻️ Restaurer une sauvegarde</button>
+        <button type="button" class="link-btn" id="backup-save">Sauvegarder les données</button>
+        <button type="button" class="link-btn" id="backup-restore">Restaurer une sauvegarde</button>
         <input type="file" id="backup-file" accept=".json,application/json" class="hidden">
       </span>
     </div>
@@ -282,6 +290,7 @@
 
   <div id="toast" role="status" aria-live="polite"></div>
 
-  <script src="app.js"></script>
+</div>
+<script src="app.js"></script>
 </body>
 </html>

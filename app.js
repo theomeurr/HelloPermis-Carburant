@@ -84,7 +84,7 @@
     try {
       localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
     } catch {
-      toast("⚠️ Impossible d'enregistrer : stockage du navigateur indisponible.");
+      toast("Impossible d'enregistrer : stockage du navigateur indisponible.");
     }
   }
 
@@ -161,10 +161,10 @@
       }
     });
     if (prev && entry.km < prev.km) {
-      return `⚠️ Le kilométrage saisi (${nfInt.format(entry.km)} km) est inférieur au dernier relevé de ce véhicule (${nfInt.format(prev.km)} km le ${frDate(prev.date)}).\n\nEnregistrer quand même ?`;
+      return `Le kilométrage saisi (${nfInt.format(entry.km)} km) est inférieur au dernier relevé de ce véhicule (${nfInt.format(prev.km)} km le ${frDate(prev.date)}).\n\nEnregistrer quand même ?`;
     }
     if (next && entry.km > next.km) {
-      return `⚠️ Le kilométrage saisi (${nfInt.format(entry.km)} km) est supérieur à un relevé plus récent de ce véhicule (${nfInt.format(next.km)} km le ${frDate(next.date)}).\n\nEnregistrer quand même ?`;
+      return `Le kilométrage saisi (${nfInt.format(entry.km)} km) est supérieur à un relevé plus récent de ce véhicule (${nfInt.format(next.km)} km le ${frDate(next.date)}).\n\nEnregistrer quand même ?`;
     }
     return null;
   }
@@ -245,17 +245,17 @@
     const duplicate = state.vehicles.some(
       (v) => v.id !== editingVehicleId && v.immat.toUpperCase() === immat);
     if (duplicate) {
-      toast(`⚠️ Un véhicule avec l’immatriculation ${immat} existe déjà.`);
+      toast(`Un véhicule avec l’immatriculation ${immat} existe déjà.`);
       return;
     }
 
     if (editingVehicleId) {
       const v = vehicleById(editingVehicleId);
       if (v) Object.assign(v, { immat, marque, modele, carburant, moniteurId });
-      toast('✅ Véhicule modifié.');
+      toast('Véhicule modifié.');
     } else {
       state.vehicles.push({ id: uid(), immat, marque, modele, carburant, moniteurId, createdAt: Date.now() });
-      toast(`✅ Véhicule ${immat} ajouté.`);
+      toast(`Véhicule ${immat} ajouté.`);
     }
     saveState();
     resetVehicleForm();
@@ -287,7 +287,7 @@
     if (btn.dataset.action === 'delete') {
       const linked = state.fills.filter((f) => f.vehicleId === v.id).length;
       const msg = linked
-        ? `Supprimer le véhicule ${v.immat} ?\n\n⚠️ Les ${linked} plein(s) associé(s) seront aussi supprimés.`
+        ? `Supprimer le véhicule ${v.immat} ?\n\nLes ${linked} plein(s) associé(s) seront aussi supprimés.`
         : `Supprimer le véhicule ${v.immat} ?`;
       if (!confirm(msg)) return;
       state.vehicles = state.vehicles.filter((x) => x.id !== v.id);
@@ -296,7 +296,7 @@
       if (editingFillId && !state.fills.some((f) => f.id === editingFillId)) resetFillForm();
       saveState();
       renderAll();
-      toast('🗑️ Véhicule supprimé.');
+      toast('Véhicule supprimé.');
     }
   });
 
@@ -312,7 +312,7 @@
         <td><span class="plate">${esc(v.immat)}</span></td>
         <td>${esc([v.marque, v.modele].filter(Boolean).join(' '))}</td>
         <td>${fuelTag(v.carburant)}</td>
-        <td>${attitre ? '👤 ' + esc(attitre.nom) : '<span class="muted-cell">—</span>'}</td>
+        <td>${attitre ? esc(attitre.nom) : '<span class="muted-cell">—</span>'}</td>
         <td class="num">${fills.length}</td>
         <td class="num">${lastKm != null ? nfInt.format(lastKm) + ' km' : '<span class="muted-cell">—</span>'}</td>
         <td class="num">${avg ? nfCons.format(avg.conso) + ' L/100' : '<span class="muted-cell">—</span>'}</td>
@@ -351,17 +351,17 @@
     const duplicate = state.moniteurs.some(
       (m) => m.id !== editingMoniteurId && m.nom.toLowerCase() === nom.toLowerCase());
     if (duplicate) {
-      toast(`⚠️ Le moniteur « ${nom} » existe déjà.`);
+      toast(`Le moniteur « ${nom} » existe déjà.`);
       return;
     }
 
     if (editingMoniteurId) {
       const m = moniteurById(editingMoniteurId);
       if (m) m.nom = nom;
-      toast('✅ Moniteur modifié.');
+      toast('Moniteur modifié.');
     } else {
       state.moniteurs.push({ id: uid(), nom, createdAt: Date.now() });
-      toast(`✅ Moniteur ${nom} ajouté.`);
+      toast(`Moniteur ${nom} ajouté.`);
     }
     saveState();
     resetMoniteurForm();
@@ -399,7 +399,7 @@
       if (editingMoniteurId === m.id) resetMoniteurForm();
       saveState();
       renderAll();
-      toast('🗑️ Moniteur supprimé (pleins conservés).');
+      toast('Moniteur supprimé (pleins conservés).');
     }
   });
 
@@ -410,7 +410,7 @@
       const fills = state.fills.filter((f) => f.moniteurId === m.id);
       const ttc = fills.reduce((s, f) => s + (Number.isFinite(f.ttc) ? f.ttc : 0), 0);
       return `<tr>
-        <td>👤 ${esc(m.nom)}</td>
+        <td>${esc(m.nom)}</td>
         <td class="num">${fills.length}</td>
         <td class="num">${fills.length ? nfEUR.format(ttc) : '<span class="muted-cell">—</span>'}</td>
         <td class="actions">
@@ -545,10 +545,10 @@
     if (editingFillId) {
       const f = state.fills.find((x) => x.id === editingFillId);
       if (f) Object.assign(f, entry);
-      toast('✅ Plein modifié.');
+      toast('Plein modifié.');
     } else {
       state.fills.push({ id: uid(), createdAt: Date.now(), ...entry });
-      toast('✅ Plein enregistré.');
+      toast('Plein enregistré.');
     }
     saveState();
     resetFillForm();
@@ -593,7 +593,7 @@
       renderFills();
       renderVehicles();
       renderMoniteurs();
-      toast('🗑️ Plein supprimé.');
+      toast('Plein supprimé.');
     }
   });
 
@@ -627,6 +627,57 @@
     renderFills();
   });
 
+  // ----- Molette de navigation par mois (le select reste masqué) -----
+
+  const monthPrev = $('#month-prev');
+  const monthNext = $('#month-next');
+  const monthLabel = $('#month-label');
+
+  // Mois (AAAA-MM) ayant au moins un plein, du plus ancien au plus récent
+  function monthsAvailable() {
+    const set = new Set();
+    state.fills.forEach((f) => {
+      const m = (f.date || '').slice(0, 7);
+      if (/^\d{4}-\d{2}$/.test(m)) set.add(m);
+    });
+    return [...set].sort();
+  }
+
+  function renderMonthFilter() {
+    const months = monthsAvailable();
+    const prev = filterMonth.value;
+    filterMonth.innerHTML = '<option value="">Tous les mois</option>' +
+      months.map((m) => `<option value="${m}">${esc(monthFull(m))}</option>`).join('');
+    filterMonth.value = months.includes(prev) ? prev : '';
+
+    const val = filterMonth.value;
+    if (!months.length) {
+      monthLabel.textContent = 'Mois';
+      monthPrev.disabled = true;
+      monthNext.disabled = true;
+      return;
+    }
+    monthLabel.textContent = val ? monthFull(val) : 'Tous les mois';
+    monthPrev.disabled = Boolean(val) && months.indexOf(val) === 0;
+    monthNext.disabled = !val; // depuis « Tous les mois », pas de suivant
+  }
+
+  // dir = -1 : mois précédent (recule dans le temps), +1 : mois suivant.
+  // « Tous les mois » se trouve après le mois le plus récent.
+  function stepMonth(dir) {
+    const months = monthsAvailable();
+    if (!months.length) return;
+    const val = filterMonth.value;
+    let idx = val ? months.indexOf(val) : months.length;
+    idx += dir;
+    if (idx < 0 || idx > months.length) return;
+    filterMonth.value = idx === months.length ? '' : months[idx];
+    renderFills();
+  }
+
+  monthPrev.addEventListener('click', () => stepMonth(-1));
+  monthNext.addEventListener('click', () => stepMonth(1));
+
   function renderVehicleOptions() {
     const sorted = [...state.vehicles].sort((a, b) => a.immat.localeCompare(b.immat, 'fr'));
     const options = sorted.map((v) => `<option value="${v.id}">${esc(vehicleLabel(v))}</option>`).join('');
@@ -652,7 +703,7 @@
     const hint = $('#veh-fuel-hint');
     const v = vehicleById($('#fill-vehicle').value);
     if (v && v.carburant) {
-      hint.innerHTML = `⛽ Carburant : ${fuelTag(v.carburant)}`;
+      hint.innerHTML = `Carburant : ${fuelTag(v.carburant)}`;
       hint.classList.remove('hidden');
     } else {
       hint.classList.add('hidden');
@@ -667,6 +718,7 @@
   });
 
   function renderFills() {
+    renderMonthFilter();
     const rows = filteredFills();
     const tbody = $('#fills-tbody');
     const consoMap = buildConsoMap();
@@ -756,13 +808,30 @@
     const tip = $('#chart-tip');
     tip.classList.add('hidden');
 
-    if (!rows.length || !chartOpen) {
+    if (!chartOpen) {
       card.classList.add('hidden');
       host.innerHTML = '';
       legend.innerHTML = '';
       return;
     }
     card.classList.remove('hidden');
+
+    // Panneau ouvert sans données : les compteurs restent visibles (à zéro),
+    // le graphique laisse place au message « aucune donnée ».
+    const showEmpty = (empty) => {
+      $('#chart-body').classList.toggle('hidden', empty);
+      $('#chart-empty').classList.toggle('hidden', !empty);
+      if (empty) {
+        host.innerHTML = '';
+        legend.innerHTML = '';
+        $('#chart-note').classList.add('hidden');
+      }
+    };
+    if (!rows.length) {
+      showEmpty(true);
+      return;
+    }
+    showEmpty(false);
 
     // La couleur suit le véhicule (ordre de création), jamais son rang dans le
     // filtre : filtrer ne repeint pas les séries restantes.
@@ -782,7 +851,7 @@
       const key = seriesKeyOf(f.vehicleId);
       serie.set(key, (serie.get(key) || 0) + f.ttc);
     });
-    if (!byMonth.size) { card.classList.add('hidden'); return; }
+    if (!byMonth.size) { showEmpty(true); return; }
 
     // Mois continus du premier au dernier, limités aux 12 derniers
     const sortedMonths = [...byMonth.keys()].sort();
@@ -960,11 +1029,7 @@
     chartToggle.classList.toggle('active', chartOpen);
     chartToggle.setAttribute('aria-pressed', String(chartOpen));
     renderChart(lastChartRows);
-    if (chartOpen && lastChartRows.length) {
-      $('#chart-card').scrollIntoView({ behavior: 'smooth', block: 'nearest' });
-    } else if (chartOpen) {
-      toast('Aucun plein à analyser pour le moment.');
-    }
+    if (chartOpen) $('#chart-card').scrollIntoView({ behavior: 'smooth', block: 'nearest' });
   });
 
   let resizeTimer = null;
@@ -1045,7 +1110,7 @@
     });
     const blob = new Blob(['\uFEFF' + lines.join('\r\n')], { type: 'text/csv;charset=utf-8' });
     download(exportFilename('csv'), blob);
-    toast('📥 Export CSV téléchargé.');
+    toast('Export CSV téléchargé.');
   });
 
   // ---- Excel (.xlsx) généré sans dépendance externe ----
@@ -1233,7 +1298,7 @@
       { name: 'xl/worksheets/sheet1.xml', content: buildSheetXml(rows) },
     ]);
     download(exportFilename('xlsx'), blob);
-    toast('📥 Export Excel téléchargé.');
+    toast('Export Excel téléchargé.');
   });
 
   // ---------------------------------------------------------
@@ -1252,7 +1317,7 @@
     };
     const blob = new Blob([JSON.stringify(payload, null, 2)], { type: 'application/json' });
     download(`sauvegarde-carburant_${todayISO()}.json`, blob);
-    toast('💾 Sauvegarde téléchargée. Conservez ce fichier précieusement.');
+    toast('Sauvegarde téléchargée. Conservez ce fichier précieusement.');
   });
 
   $('#backup-restore').addEventListener('click', () => $('#backup-file').click());
@@ -1268,7 +1333,7 @@
       const ok = confirm(
         'Restaurer cette sauvegarde ?\n\n' +
         `${data.vehicles.length} véhicule(s) · ${moniteurs.length} moniteur(s) · ${data.fills.length} plein(s)\n\n` +
-        '⚠️ Les données actuelles de ce navigateur seront remplacées.');
+        'Les données actuelles de ce navigateur seront remplacées.');
       if (!ok) return;
       state.vehicles = data.vehicles;
       state.moniteurs = moniteurs;
@@ -1280,8 +1345,8 @@
       resetFillForm();
       tvaInput.value = state.settings.tva;
       renderAll();
-      toast('♻️ Données restaurées.');
-    }).catch(() => toast('⚠️ Fichier de sauvegarde invalide.'));
+      toast('Données restaurées.');
+    }).catch(() => toast('Fichier de sauvegarde invalide.'));
   });
 
   // ---------------------------------------------------------
