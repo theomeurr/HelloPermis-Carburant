@@ -198,6 +198,24 @@
   // ---------------------------------------------------------
 
   const vehForm = $('#vehicle-form');
+  const immatInput = $('#veh-immat');
+
+  // Formatage SIV « AA-123-AA » : majuscules + tirets insérés automatiquement.
+  // Retourne null si la saisie ne suit pas ce format (ancienne plaque, etc.)
+  function formatImmat(raw) {
+    const m = raw.match(/^([A-Z]{2})([0-9]{0,3})([A-Z]{0,2})$/);
+    if (!m) return null;
+    let out = m[1];
+    if (m[2]) out += '-' + m[2];
+    if (m[3]) out += '-' + m[3];
+    return out;
+  }
+
+  immatInput.addEventListener('input', () => {
+    const raw = immatInput.value.toUpperCase().replace(/[^A-Z0-9]/g, '');
+    const formatted = formatImmat(raw);
+    if (formatted !== null && formatted !== immatInput.value) immatInput.value = formatted;
+  });
 
   function resetVehicleForm() {
     editingVehicleId = null;
@@ -209,7 +227,8 @@
 
   vehForm.addEventListener('submit', (e) => {
     e.preventDefault();
-    const immat = $('#veh-immat').value.trim().toUpperCase();
+    const rawImmat = $('#veh-immat').value.trim().toUpperCase();
+    const immat = formatImmat(rawImmat.replace(/[^A-Z0-9]/g, '')) || rawImmat;
     const marque = $('#veh-marque').value.trim();
     const modele = $('#veh-modele').value.trim();
     const carburant = $('#veh-carburant').value;
@@ -458,7 +477,18 @@
     }
   }
 
-  prixInput.addEventListener('input', recalcTotals);
+  // Prix au litre : point décimal inséré automatiquement après le premier
+  // chiffre (« 1859 » -> « 1.859 »), virgule acceptée, 3 décimales max.
+  prixInput.addEventListener('input', () => {
+    let v = prixInput.value.replace(/,/g, '.').replace(/[^0-9.]/g, '');
+    const firstDot = v.indexOf('.');
+    if (firstDot !== -1) v = v.slice(0, firstDot + 1) + v.slice(firstDot + 1).replace(/\./g, '');
+    if (!v.includes('.') && v.length >= 2) v = v[0] + '.' + v.slice(1);
+    const parts = v.split('.');
+    if (parts[1] && parts[1].length > 3) v = parts[0] + '.' + parts[1].slice(0, 3);
+    if (v !== prixInput.value) prixInput.value = v;
+    recalcTotals();
+  });
   litresInput.addEventListener('input', recalcTotals);
   ttcInput.addEventListener('input', recalcHTFromTTC);
   htInput.addEventListener('input', recalcTTCFromHT);

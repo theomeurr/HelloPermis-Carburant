@@ -11,6 +11,7 @@ Un seul onglet regroupe les informations de référence de l'auto-école.
 **🚗 Véhicules**
 - Ajout, modification et suppression des voitures : **immatriculation**, **marque**, **modèle**, **type de carburant** (Gazole, SP95-E10, SP95, SP98, E85, GPL) et **moniteur attitré**
 - Chaque voiture est associée à son moniteur habituel — modifiable à tout moment si la voiture change de moniteur
+- L'immatriculation se met en forme toute seule pendant la saisie : majuscules et tirets automatiques (`ab123cd` → `AB-123-CD`) ; les anciennes plaques restent acceptées telles quelles
 - Détection des immatriculations en double
 - Par véhicule : nombre de pleins, dernier kilométrage, **consommation moyenne (L/100 km)** et **coût carburant par km**
 - Le carburant du véhicule sélectionné est **rappelé dans le formulaire de plein** (évite les erreurs à la pompe)
@@ -26,7 +27,7 @@ Pour chaque plein :
 - **Date**
 - **Véhicule** (référence de la voiture)
 - **Moniteur** (choisi dans la base, facultatif)
-- **Prix au litre** (€)
+- **Prix au litre** (€) — le point décimal s'insère automatiquement après le premier chiffre (`1859` → `1.859`)
 - **Nombre de litres**
 - **Total HT** et **Total TTC** — calculés automatiquement (prix × litres, TVA déduite, taux réglable, 20 % par défaut) et modifiables à la main si besoin
 - **Kilométrage total** de la voiture

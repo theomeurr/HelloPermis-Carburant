@@ -59,7 +59,7 @@
             </div>
             <div class="field">
               <label for="fill-prix">Prix au litre (€) *</label>
-              <input type="number" id="fill-prix" min="0" step="0.001" placeholder="1.859" required>
+              <input type="text" id="fill-prix" inputmode="decimal" placeholder="1.859" spellcheck="false" required>
             </div>
             <div class="field">
               <label for="fill-litres">Litres *</label>
@@ -171,7 +171,7 @@
           <div class="form-grid">
             <div class="field">
               <label for="veh-immat">Immatriculation *</label>
-              <input type="text" id="veh-immat" class="input-immat" placeholder="AB-123-CD" maxlength="20" required>
+              <input type="text" id="veh-immat" class="input-immat" placeholder="AB-123-CD" maxlength="20" autocapitalize="characters" spellcheck="false" required>
             </div>
             <div class="field">
               <label for="veh-marque">Marque *</label>
