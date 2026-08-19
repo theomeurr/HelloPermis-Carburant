@@ -37,7 +37,16 @@
   const nfEUR  = new Intl.NumberFormat('fr-FR', { style: 'currency', currency: 'EUR' });
   const nfEUR3 = new Intl.NumberFormat('fr-FR', { style: 'currency', currency: 'EUR', minimumFractionDigits: 3, maximumFractionDigits: 3 });
   const nfNum  = new Intl.NumberFormat('fr-FR', { maximumFractionDigits: 2 });
+  const nfCons = new Intl.NumberFormat('fr-FR', { maximumFractionDigits: 1 });
   const nfInt  = new Intl.NumberFormat('fr-FR', { maximumFractionDigits: 0 });
+
+  // 'AAAA-MM' -> nom de mois
+  const monthName = (ym, opts) => {
+    const [y, m] = ym.split('-').map(Number);
+    return new Intl.DateTimeFormat('fr-FR', opts).format(new Date(y, m - 1, 15));
+  };
+  const monthShort = (ym) => `${monthName(ym, { month: 'short' })} ${ym.slice(2, 4)}`;
+  const monthFull = (ym) => monthName(ym, { month: 'long', year: 'numeric' });
 
   let toastTimer = null;
   function toast(msg) {
@@ -53,13 +62,14 @@
   // ---------------------------------------------------------
 
   function loadState() {
-    const fallback = { vehicles: [], fills: [], settings: { tva: 20 } };
+    const fallback = { vehicles: [], moniteurs: [], fills: [], settings: { tva: 20 } };
     try {
       const raw = localStorage.getItem(STORAGE_KEY);
       if (!raw) return fallback;
       const parsed = JSON.parse(raw);
       return {
         vehicles: Array.isArray(parsed.vehicles) ? parsed.vehicles : [],
+        moniteurs: Array.isArray(parsed.moniteurs) ? parsed.moniteurs : [],
         fills: Array.isArray(parsed.fills) ? parsed.fills : [],
         settings: Object.assign({ tva: 20 }, parsed.settings),
       };
@@ -79,16 +89,77 @@
   }
 
   const vehicleById = (id) => state.vehicles.find((v) => v.id === id);
+  const moniteurById = (id) => state.moniteurs.find((m) => m.id === id);
 
   const vehicleLabel = (v) =>
     `${v.immat} — ${[v.marque, v.modele].filter(Boolean).join(' ')}`.replace(/ — $/, '');
 
   let editingVehicleId = null;
+  let editingMoniteurId = null;
   let editingFillId = null;
+
+  // ---------------------------------------------------------
+  // Consommation (L/100 km) et moyennes par véhicule
+  // ---------------------------------------------------------
+
+  function chronoFills(vehicleId) {
+    return state.fills
+      .filter((f) => f.vehicleId === vehicleId)
+      .sort((a, b) => (a.date || '').localeCompare(b.date || '') || (a.createdAt || 0) - (b.createdAt || 0));
+  }
+
+  // conso de chaque plein, calculée sur la distance depuis le plein précédent du véhicule
+  function buildConsoMap() {
+    const map = new Map();
+    state.vehicles.forEach((v) => {
+      const fs = chronoFills(v.id);
+      for (let i = 1; i < fs.length; i++) {
+        const dist = fs[i].km - fs[i - 1].km;
+        if (dist > 0 && fs[i].litres > 0) map.set(fs[i].id, (fs[i].litres / dist) * 100);
+      }
+    });
+    return map;
+  }
+
+  // conso moyenne et coût TTC/km entre le premier et le dernier relevé du véhicule
+  function vehicleAverages(vehicleId) {
+    const fs = chronoFills(vehicleId);
+    if (fs.length < 2) return null;
+    const dist = fs[fs.length - 1].km - fs[0].km;
+    if (!(dist > 0)) return null;
+    const litres = fs.slice(1).reduce((s, f) => s + (f.litres || 0), 0);
+    const ttc = fs.slice(1).reduce((s, f) => s + (f.ttc || 0), 0);
+    return { conso: (litres / dist) * 100, coutKm: ttc / dist };
+  }
+
+  // alerte si le kilométrage saisi est incohérent avec les autres relevés du véhicule
+  function kmWarning(entry, excludeId) {
+    let prev = null;
+    let next = null;
+    state.fills.forEach((f) => {
+      if (f.vehicleId !== entry.vehicleId || f.id === excludeId || !Number.isFinite(f.km)) return;
+      if ((f.date || '') <= entry.date) {
+        if (!prev || (f.date || '') > (prev.date || '') ||
+            ((f.date || '') === (prev.date || '') && (f.createdAt || 0) > (prev.createdAt || 0))) prev = f;
+      } else if (!next || (f.date || '') < (next.date || '') ||
+            ((f.date || '') === (next.date || '') && (f.createdAt || 0) < (next.createdAt || 0))) {
+        next = f;
+      }
+    });
+    if (prev && entry.km < prev.km) {
+      return `⚠️ Le kilométrage saisi (${nfInt.format(entry.km)} km) est inférieur au dernier relevé de ce véhicule (${nfInt.format(prev.km)} km le ${frDate(prev.date)}).\n\nEnregistrer quand même ?`;
+    }
+    if (next && entry.km > next.km) {
+      return `⚠️ Le kilométrage saisi (${nfInt.format(entry.km)} km) est supérieur à un relevé plus récent de ce véhicule (${nfInt.format(next.km)} km le ${frDate(next.date)}).\n\nEnregistrer quand même ?`;
+    }
+    return null;
+  }
 
   // ---------------------------------------------------------
   // Navigation par onglets
   // ---------------------------------------------------------
+
+  const VIEWS = { suivi: '#view-suivi', vehicules: '#view-vehicules', moniteurs: '#view-moniteurs' };
 
   function switchView(view) {
     document.querySelectorAll('.tab').forEach((btn) => {
@@ -96,8 +167,8 @@
       btn.classList.toggle('active', active);
       btn.setAttribute('aria-selected', String(active));
     });
-    $('#view-suivi').classList.toggle('hidden', view !== 'suivi');
-    $('#view-vehicules').classList.toggle('hidden', view !== 'vehicules');
+    Object.entries(VIEWS).forEach(([key, sel]) => $(sel).classList.toggle('hidden', key !== view));
+    if (view === 'suivi') renderChart(lastChartRows); // la largeur n'est mesurable que vue visible
   }
 
   document.querySelectorAll('.tab').forEach((btn) =>
@@ -194,12 +265,15 @@
     tbody.innerHTML = sorted.map((v) => {
       const fills = state.fills.filter((f) => f.vehicleId === v.id);
       const lastKm = fills.length ? Math.max(...fills.map((f) => f.km || 0)) : null;
+      const avg = vehicleAverages(v.id);
       return `<tr>
         <td><span class="plate">${esc(v.immat)}</span></td>
         <td>${esc(v.marque)}</td>
         <td>${esc(v.modele)}</td>
         <td class="num">${fills.length}</td>
-        <td class="num">${lastKm != null ? nfInt.format(lastKm) + ' km' : '—'}</td>
+        <td class="num">${lastKm != null ? nfInt.format(lastKm) + ' km' : '<span class="muted-cell">—</span>'}</td>
+        <td class="num">${avg ? nfCons.format(avg.conso) + ' L/100' : '<span class="muted-cell">—</span>'}</td>
+        <td class="num">${avg ? nfEUR3.format(avg.coutKm) + '/km' : '<span class="muted-cell">—</span>'}</td>
         <td class="actions">
           <button type="button" class="link-btn" data-action="edit" data-id="${v.id}">Modifier</button>
           <button type="button" class="link-btn danger" data-action="delete" data-id="${v.id}">Supprimer</button>
@@ -208,6 +282,115 @@
     }).join('');
     $('#vehicles-empty').classList.toggle('hidden', sorted.length > 0);
     $('#vehicles-table').classList.toggle('hidden', sorted.length === 0);
+  }
+
+  // ---------------------------------------------------------
+  // Moniteurs
+  // ---------------------------------------------------------
+
+  const monForm = $('#moniteur-form');
+
+  function resetMoniteurForm() {
+    editingMoniteurId = null;
+    monForm.reset();
+    $('#moniteur-form-title').textContent = 'Ajouter un moniteur';
+    $('#moniteur-submit').textContent = 'Ajouter le moniteur';
+    $('#moniteur-cancel').classList.add('hidden');
+  }
+
+  monForm.addEventListener('submit', (e) => {
+    e.preventDefault();
+    const nom = $('#mon-nom').value.trim();
+    if (!nom) {
+      toast('Merci de renseigner le nom du moniteur.');
+      return;
+    }
+    const duplicate = state.moniteurs.some(
+      (m) => m.id !== editingMoniteurId && m.nom.toLowerCase() === nom.toLowerCase());
+    if (duplicate) {
+      toast(`⚠️ Le moniteur « ${nom} » existe déjà.`);
+      return;
+    }
+
+    if (editingMoniteurId) {
+      const m = moniteurById(editingMoniteurId);
+      if (m) m.nom = nom;
+      toast('✅ Moniteur modifié.');
+    } else {
+      state.moniteurs.push({ id: uid(), nom, createdAt: Date.now() });
+      toast(`✅ Moniteur ${nom} ajouté.`);
+    }
+    saveState();
+    resetMoniteurForm();
+    renderAll();
+  });
+
+  $('#moniteur-cancel').addEventListener('click', resetMoniteurForm);
+
+  $('#moniteurs-tbody').addEventListener('click', (e) => {
+    const btn = e.target.closest('button[data-action]');
+    if (!btn) return;
+    const m = moniteurById(btn.dataset.id);
+    if (!m) return;
+
+    if (btn.dataset.action === 'edit') {
+      editingMoniteurId = m.id;
+      $('#mon-nom').value = m.nom;
+      $('#moniteur-form-title').textContent = `Modifier le moniteur ${m.nom}`;
+      $('#moniteur-submit').textContent = 'Enregistrer les modifications';
+      $('#moniteur-cancel').classList.remove('hidden');
+      monForm.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      $('#mon-nom').focus();
+    }
+
+    if (btn.dataset.action === 'delete') {
+      const linked = state.fills.filter((f) => f.moniteurId === m.id).length;
+      const msg = linked
+        ? `Supprimer le moniteur ${m.nom} ?\n\nLes ${linked} plein(s) associé(s) seront conservés, sans moniteur.`
+        : `Supprimer le moniteur ${m.nom} ?`;
+      if (!confirm(msg)) return;
+      state.moniteurs = state.moniteurs.filter((x) => x.id !== m.id);
+      state.fills.forEach((f) => { if (f.moniteurId === m.id) f.moniteurId = null; });
+      if (editingMoniteurId === m.id) resetMoniteurForm();
+      saveState();
+      renderAll();
+      toast('🗑️ Moniteur supprimé (pleins conservés).');
+    }
+  });
+
+  function renderMoniteurs() {
+    const tbody = $('#moniteurs-tbody');
+    const sorted = [...state.moniteurs].sort((a, b) => a.nom.localeCompare(b.nom, 'fr'));
+    tbody.innerHTML = sorted.map((m) => {
+      const fills = state.fills.filter((f) => f.moniteurId === m.id);
+      const ttc = fills.reduce((s, f) => s + (Number.isFinite(f.ttc) ? f.ttc : 0), 0);
+      return `<tr>
+        <td>👤 ${esc(m.nom)}</td>
+        <td class="num">${fills.length}</td>
+        <td class="num">${fills.length ? nfEUR.format(ttc) : '<span class="muted-cell">—</span>'}</td>
+        <td class="actions">
+          <button type="button" class="link-btn" data-action="edit" data-id="${m.id}">Modifier</button>
+          <button type="button" class="link-btn danger" data-action="delete" data-id="${m.id}">Supprimer</button>
+        </td>
+      </tr>`;
+    }).join('');
+    $('#moniteurs-empty').classList.toggle('hidden', sorted.length > 0);
+    $('#moniteurs-table').classList.toggle('hidden', sorted.length === 0);
+  }
+
+  function renderMoniteurOptions() {
+    const sorted = [...state.moniteurs].sort((a, b) => a.nom.localeCompare(b.nom, 'fr'));
+    const options = sorted.map((m) => `<option value="${m.id}">${esc(m.nom)}</option>`).join('');
+
+    const formSelect = $('#fill-moniteur');
+    const prevForm = formSelect.value;
+    formSelect.innerHTML = `<option value="">— Aucun —</option>${options}`;
+    if ([...formSelect.options].some((o) => o.value === prevForm)) formSelect.value = prevForm;
+
+    const filterSelect = $('#filter-moniteur');
+    const prevFilter = filterSelect.value;
+    filterSelect.innerHTML = `<option value="">Tous les moniteurs</option>${options}`;
+    if ([...filterSelect.options].some((o) => o.value === prevFilter)) filterSelect.value = prevFilter;
   }
 
   // ---------------------------------------------------------
@@ -264,9 +447,11 @@
     editingFillId = null;
     const keepDate = $('#fill-date').value || todayISO();
     const keepVehicle = $('#fill-vehicle').value;
+    const keepMoniteur = $('#fill-moniteur').value;
     fillForm.reset();
     $('#fill-date').value = keepDate;
     $('#fill-vehicle').value = keepVehicle;
+    $('#fill-moniteur').value = keepMoniteur;
     tvaInput.value = state.settings.tva;
     $('#fill-form-title').textContent = 'Ajouter un plein';
     $('#fill-submit').textContent = 'Ajouter le plein';
@@ -278,6 +463,7 @@
     const entry = {
       date: $('#fill-date').value,
       vehicleId: $('#fill-vehicle').value,
+      moniteurId: $('#fill-moniteur').value || null,
       prix: parseFloat(prixInput.value),
       litres: parseFloat(litresInput.value),
       ht: parseFloat(htInput.value),
@@ -291,6 +477,9 @@
     if (!Number.isFinite(entry.ht) || !Number.isFinite(entry.ttc)) { toast('Merci de renseigner les totaux HT et TTC.'); return; }
     if (!Number.isFinite(entry.km) || entry.km < 0) { toast('Merci de renseigner le kilométrage du véhicule.'); return; }
 
+    const warning = kmWarning(entry, editingFillId);
+    if (warning && !confirm(warning)) return;
+
     if (editingFillId) {
       const f = state.fills.find((x) => x.id === editingFillId);
       if (f) Object.assign(f, entry);
@@ -303,6 +492,7 @@
     resetFillForm();
     renderFills();
     renderVehicles();
+    renderMoniteurs();
   });
 
   $('#fill-cancel').addEventListener('click', resetFillForm);
@@ -317,6 +507,7 @@
       editingFillId = f.id;
       $('#fill-date').value = f.date;
       $('#fill-vehicle').value = f.vehicleId;
+      $('#fill-moniteur').value = f.moniteurId || '';
       prixInput.value = f.prix;
       litresInput.value = f.litres;
       tvaInput.value = state.settings.tva;
@@ -338,6 +529,7 @@
       saveState();
       renderFills();
       renderVehicles();
+      renderMoniteurs();
       toast('🗑️ Plein supprimé.');
     }
   });
@@ -347,20 +539,27 @@
   // ---------------------------------------------------------
 
   const filterVehicle = $('#filter-vehicle');
+  const filterMoniteur = $('#filter-moniteur');
   const filterMonth = $('#filter-month');
 
   function filteredFills() {
     const veh = filterVehicle.value;
+    const mon = filterMoniteur.value;
     const month = filterMonth.value; // 'AAAA-MM'
     return state.fills
-      .filter((f) => (!veh || f.vehicleId === veh) && (!month || (f.date || '').startsWith(month)))
+      .filter((f) =>
+        (!veh || f.vehicleId === veh) &&
+        (!mon || f.moniteurId === mon) &&
+        (!month || (f.date || '').startsWith(month)))
       .sort((a, b) => (b.date || '').localeCompare(a.date || '') || (b.createdAt || 0) - (a.createdAt || 0));
   }
 
   filterVehicle.addEventListener('change', renderFills);
+  filterMoniteur.addEventListener('change', renderFills);
   filterMonth.addEventListener('change', renderFills);
   $('#filter-reset').addEventListener('click', () => {
     filterVehicle.value = '';
+    filterMoniteur.value = '';
     filterMonth.value = '';
     renderFills();
   });
@@ -387,20 +586,25 @@
   function renderFills() {
     const rows = filteredFills();
     const tbody = $('#fills-tbody');
+    const consoMap = buildConsoMap();
 
     tbody.innerHTML = rows.map((f) => {
       const v = vehicleById(f.vehicleId);
+      const m = f.moniteurId ? moniteurById(f.moniteurId) : null;
+      const conso = consoMap.get(f.id);
       const vehCell = v
         ? `<div class="veh-cell"><span class="plate">${esc(v.immat)}</span><span class="veh-name">${esc([v.marque, v.modele].filter(Boolean).join(' '))}</span></div>`
         : '<span class="veh-name">Véhicule supprimé</span>';
       return `<tr>
         <td>${frDate(f.date)}</td>
         <td>${vehCell}</td>
+        <td>${m ? esc(m.nom) : '<span class="muted-cell">—</span>'}</td>
         <td class="num">${nfEUR3.format(f.prix)}</td>
         <td class="num">${nfNum.format(f.litres)} L</td>
         <td class="num">${nfEUR.format(f.ht)}</td>
         <td class="num strong">${nfEUR.format(f.ttc)}</td>
         <td class="num">${nfInt.format(f.km)} km</td>
+        <td class="num">${conso != null ? nfCons.format(conso) + ' L/100' : '<span class="muted-cell">—</span>'}</td>
         <td class="actions">
           <button type="button" class="link-btn" data-action="edit" data-id="${f.id}">Modifier</button>
           <button type="button" class="link-btn danger" data-action="delete" data-id="${f.id}">Supprimer</button>
@@ -408,7 +612,7 @@
       </tr>`;
     }).join('');
 
-    const hasFilter = Boolean(filterVehicle.value || filterMonth.value);
+    const hasFilter = Boolean(filterVehicle.value || filterMoniteur.value || filterMonth.value);
     $('#filter-reset').classList.toggle('hidden', !hasFilter);
     $('#fills-empty').textContent = hasFilter
       ? 'Aucun plein ne correspond aux filtres sélectionnés.'
@@ -422,37 +626,284 @@
     $('#stat-litres').textContent = `${nfNum.format(sum((f) => f.litres))} L`;
     $('#stat-ht').textContent = nfEUR.format(sum((f) => f.ht));
     $('#stat-ttc').textContent = nfEUR.format(sum((f) => f.ttc));
+
+    renderChart(rows);
   }
 
   function renderAll() {
     renderVehicleOptions();
+    renderMoniteurOptions();
     renderVehicles();
+    renderMoniteurs();
     renderFills();
   }
+
+  // ---------------------------------------------------------
+  // Graphique : dépenses TTC par mois, empilées par véhicule
+  // ---------------------------------------------------------
+
+  // Palette catégorielle validée (daltonisme + contraste) — l'ordre des
+  // couleurs est un mécanisme de lisibilité, ne pas le réordonner.
+  const CHART_COLORS = ['#2a78d6', '#eb6834', '#1baf7a', '#eda100', '#e87ba4', '#008300', '#4a3aa7', '#e34948'];
+  const CHART_OTHER = '#898781';
+
+  let lastChartRows = [];
+
+  function tickStep(max) {
+    const target = Math.max(max / 4, 1e-9);
+    const pow = Math.pow(10, Math.floor(Math.log10(target)));
+    for (const mult of [1, 2, 5, 10]) {
+      const s = mult * pow;
+      if (max / s <= 4.6) return s;
+    }
+    return 10 * pow;
+  }
+
+  function topRoundedPath(x, y, w, h, r) {
+    r = Math.min(r, h, w / 2);
+    return `M${x},${y + h} L${x},${y + r} Q${x},${y} ${x + r},${y} L${x + w - r},${y} Q${x + w},${y} ${x + w},${y + r} L${x + w},${y + h} Z`;
+  }
+
+  function renderChart(rows) {
+    lastChartRows = rows;
+    const card = $('#chart-card');
+    const host = $('#chart-svg');
+    const legend = $('#chart-legend');
+    const tip = $('#chart-tip');
+    tip.classList.add('hidden');
+
+    if (!rows.length) {
+      card.classList.add('hidden');
+      host.innerHTML = '';
+      legend.innerHTML = '';
+      return;
+    }
+    card.classList.remove('hidden');
+
+    // La couleur suit le véhicule (ordre de création), jamais son rang dans le
+    // filtre : filtrer ne repeint pas les séries restantes.
+    const order = [...state.vehicles].sort((a, b) =>
+      (a.createdAt || 0) - (b.createdAt || 0) || a.immat.localeCompare(b.immat, 'fr'));
+    const slotOf = new Map(order.map((v, i) => [v.id, i]));
+    const seriesKeyOf = (vid) =>
+      slotOf.has(vid) && slotOf.get(vid) < CHART_COLORS.length ? vid : 'autres';
+
+    // Agrégat mois -> série -> total TTC
+    const byMonth = new Map();
+    rows.forEach((f) => {
+      const m = (f.date || '').slice(0, 7);
+      if (!/^\d{4}-\d{2}$/.test(m) || !Number.isFinite(f.ttc)) return;
+      if (!byMonth.has(m)) byMonth.set(m, new Map());
+      const serie = byMonth.get(m);
+      const key = seriesKeyOf(f.vehicleId);
+      serie.set(key, (serie.get(key) || 0) + f.ttc);
+    });
+    if (!byMonth.size) { card.classList.add('hidden'); return; }
+
+    // Mois continus du premier au dernier, limités aux 12 derniers
+    const sortedMonths = [...byMonth.keys()].sort();
+    let months = [];
+    let [y, mo] = sortedMonths[0].split('-').map(Number);
+    const lastMonth = sortedMonths[sortedMonths.length - 1];
+    while (months.length <= 400) {
+      const key = `${y}-${String(mo).padStart(2, '0')}`;
+      months.push(key);
+      if (key === lastMonth) break;
+      mo++;
+      if (mo > 12) { mo = 1; y++; }
+    }
+    const truncated = months.length > 12;
+    if (truncated) months = months.slice(-12);
+    $('#chart-note').classList.toggle('hidden', !truncated);
+
+    // Séries présentes, dans l'ordre stable ; au-delà de 8 véhicules -> « Autres »
+    const present = new Set();
+    months.forEach((m) => (byMonth.get(m) || new Map()).forEach((_, k) => present.add(k)));
+    const series = order
+      .filter((v, i) => i < CHART_COLORS.length && present.has(v.id))
+      .map((v) => ({ key: v.id, label: v.immat, full: vehicleLabel(v), color: CHART_COLORS[slotOf.get(v.id)] }));
+    if (present.has('autres')) series.push({ key: 'autres', label: 'Autres', full: 'Autres véhicules', color: CHART_OTHER });
+
+    // Légende (dès 2 séries ; une seule série = le titre suffit)
+    legend.innerHTML = '';
+    if (series.length >= 2) {
+      series.forEach((s) => {
+        const item = document.createElement('span');
+        item.className = 'legend-item';
+        item.title = s.full;
+        const sw = document.createElement('span');
+        sw.className = 'legend-swatch';
+        sw.style.background = s.color;
+        const txt = document.createElement('span');
+        txt.textContent = s.label;
+        item.append(sw, txt);
+        legend.appendChild(item);
+      });
+    }
+
+    // Géométrie
+    const width = Math.max(320, Math.min(1200, host.clientWidth || 720));
+    const height = 240;
+    const mL = 48, mR = 6, mT = 12, mB = 26;
+    const innerW = width - mL - mR;
+    const innerH = height - mT - mB;
+    const baseline = mT + innerH;
+
+    const monthData = months.map((m) => {
+      const values = series
+        .map((s) => ({ ...s, value: (byMonth.get(m) || new Map()).get(s.key) || 0 }))
+        .filter((s) => s.value > 0);
+      return { month: m, values, total: values.reduce((acc, s) => acc + s.value, 0) };
+    });
+
+    const maxTotal = Math.max(...monthData.map((d) => d.total), 1);
+    const step = tickStep(maxTotal);
+    const yTop = Math.ceil(maxTotal / step) * step;
+    const yScale = (val) => (val / yTop) * innerH;
+
+    const bandW = innerW / months.length;
+    const barW = Math.min(24, Math.max(8, bandW * 0.6));
+    const GAP = 2; // écart couleur de surface entre segments empilés
+
+    let svg = `<svg viewBox="0 0 ${width} ${height}" width="${width}" height="${height}" role="img" aria-label="Dépenses de carburant TTC par mois">`;
+
+    // Grille : traits fins, unis, en retrait ; graduations arrondies
+    for (let v = 0; v <= yTop + 1e-9; v += step) {
+      const yy = baseline - yScale(v);
+      svg += `<line x1="${mL}" y1="${yy.toFixed(1)}" x2="${width - mR}" y2="${yy.toFixed(1)}" class="${v === 0 ? 'chart-baseline' : 'chart-grid'}"/>`;
+      svg += `<text x="${mL - 8}" y="${(yy + 3.5).toFixed(1)}" class="chart-tick" text-anchor="end">${v === 0 ? '0' : nfInt.format(v) + ' €'}</text>`;
+    }
+
+    // Barres empilées (segments séparés par un écart, sommet arrondi)
+    monthData.forEach((d, i) => {
+      const x = mL + i * bandW + (bandW - barW) / 2;
+      svg += `<g class="month-g" data-i="${i}">`;
+      let cum = 0;
+      d.values.forEach((s, k) => {
+        const isTop = k === d.values.length - 1;
+        const yTopSeg = baseline - yScale(cum + s.value);
+        const yBottomSeg = baseline - yScale(cum) - (k > 0 ? GAP : 0);
+        cum += s.value;
+        const h = yBottomSeg - yTopSeg;
+        if (h < 1) return;
+        svg += isTop
+          ? `<path class="seg" d="${topRoundedPath(x, yTopSeg, barW, h, 4)}" fill="${s.color}"/>`
+          : `<rect class="seg" x="${x.toFixed(1)}" y="${yTopSeg.toFixed(1)}" width="${barW.toFixed(1)}" height="${h.toFixed(1)}" fill="${s.color}"/>`;
+      });
+      svg += '</g>';
+
+      // Étiquette de mois (une sur deux si l'espace manque, en gardant la dernière)
+      if (bandW >= 34 || i % 2 === (months.length - 1) % 2) {
+        svg += `<text x="${(mL + i * bandW + bandW / 2).toFixed(1)}" y="${height - 8}" class="chart-tick" text-anchor="middle">${esc(monthShort(d.month))}</text>`;
+      }
+    });
+
+    // Zones de survol : une bande par mois, cible plus large que la marque
+    monthData.forEach((d, i) => {
+      const label = `${monthFull(d.month)} : ${d.total > 0 ? nfEUR.format(d.total) : 'aucun plein'}`;
+      svg += `<rect class="month-hit" data-i="${i}" x="${(mL + i * bandW).toFixed(1)}" y="${mT}" width="${bandW.toFixed(1)}" height="${innerH}" tabindex="0" aria-label="${esc(label)}"/>`;
+    });
+
+    svg += '</svg>';
+    host.innerHTML = svg;
+
+    // Infobulle : toutes les séries du mois, la valeur d'abord (noms via textContent)
+    const svgEl = host.querySelector('svg');
+    const showTip = (i) => {
+      const d = monthData[i];
+      tip.innerHTML = '';
+      const title = document.createElement('div');
+      title.className = 'tip-title';
+      title.textContent = monthFull(d.month);
+      tip.appendChild(title);
+      if (!d.values.length) {
+        const none = document.createElement('div');
+        none.className = 'tip-row';
+        none.textContent = 'Aucun plein ce mois-ci';
+        tip.appendChild(none);
+      }
+      d.values.forEach((s) => {
+        const row = document.createElement('div');
+        row.className = 'tip-row';
+        const key = document.createElement('span');
+        key.className = 'tip-key';
+        key.style.background = s.color;
+        const val = document.createElement('span');
+        val.className = 'tip-value';
+        val.textContent = nfEUR.format(s.value);
+        const name = document.createElement('span');
+        name.className = 'tip-name';
+        name.textContent = s.label;
+        row.append(key, val, name);
+        tip.appendChild(row);
+      });
+      if (d.values.length > 1) {
+        const row = document.createElement('div');
+        row.className = 'tip-row tip-total';
+        const val = document.createElement('span');
+        val.className = 'tip-value';
+        val.textContent = nfEUR.format(d.total);
+        const name = document.createElement('span');
+        name.className = 'tip-name';
+        name.textContent = 'Total';
+        row.append(val, name);
+        tip.appendChild(row);
+      }
+      tip.classList.remove('hidden');
+      const wrap = host.parentElement;
+      const scale = svgEl.getBoundingClientRect().width / width || 1;
+      const center = (mL + i * bandW + bandW / 2) * scale;
+      const tw = tip.offsetWidth;
+      tip.style.left = `${Math.max(4, Math.min(center - tw / 2, wrap.clientWidth - tw - 4))}px`;
+      svgEl.querySelectorAll('.month-g').forEach((g) => g.classList.toggle('active', g.dataset.i === String(i)));
+    };
+    const hideTip = () => {
+      tip.classList.add('hidden');
+      svgEl.querySelectorAll('.month-g.active').forEach((g) => g.classList.remove('active'));
+    };
+    svgEl.querySelectorAll('.month-hit').forEach((hit) => {
+      const i = Number(hit.dataset.i);
+      hit.addEventListener('pointerenter', () => showTip(i));
+      hit.addEventListener('focus', () => showTip(i));
+      hit.addEventListener('pointerleave', hideTip);
+      hit.addEventListener('blur', hideTip);
+    });
+  }
+
+  let resizeTimer = null;
+  window.addEventListener('resize', () => {
+    clearTimeout(resizeTimer);
+    resizeTimer = setTimeout(() => renderChart(lastChartRows), 150);
+  });
 
   // ---------------------------------------------------------
   // Exports (les lignes affichées, triées par date croissante)
   // ---------------------------------------------------------
 
-  const EXPORT_HEADERS = ['Date', 'Immatriculation', 'Marque', 'Modèle',
-    'Prix au litre (€)', 'Litres', 'Total HT (€)', 'Total TTC (€)', 'Kilométrage (km)'];
+  const EXPORT_HEADERS = ['Date', 'Immatriculation', 'Marque', 'Modèle', 'Moniteur',
+    'Prix au litre (€)', 'Litres', 'Total HT (€)', 'Total TTC (€)', 'Kilométrage (km)', 'Conso (L/100 km)'];
 
   function exportRows() {
+    const consoMap = buildConsoMap();
     return filteredFills()
       .slice()
       .reverse() // ordre chronologique pour l'export
       .map((f) => {
         const v = vehicleById(f.vehicleId) || {};
+        const m = f.moniteurId ? moniteurById(f.moniteurId) : null;
+        const conso = consoMap.get(f.id);
         return {
           date: f.date,
           immat: v.immat || '',
           marque: v.marque || '',
           modele: v.modele || '',
+          moniteur: m ? m.nom : '',
           prix: f.prix,
           litres: f.litres,
           ht: f.ht,
           ttc: f.ttc,
           km: f.km,
+          conso: conso != null ? Math.round(conso * 100) / 100 : null,
         };
       });
   }
@@ -461,6 +912,8 @@
     const parts = ['suivi-carburant'];
     const v = filterVehicle.value ? vehicleById(filterVehicle.value) : null;
     if (v) parts.push(v.immat.replace(/[^\wÀ-ÿ-]+/g, '-'));
+    const m = filterMoniteur.value ? moniteurById(filterMoniteur.value) : null;
+    if (m) parts.push(m.nom.replace(/[^\wÀ-ÿ-]+/g, '-'));
     if (filterMonth.value) parts.push(filterMonth.value);
     parts.push(todayISO());
     return parts.join('_') + '.' + ext;
@@ -488,8 +941,8 @@
     const lines = [EXPORT_HEADERS.join(';')];
     rows.forEach((r) => {
       lines.push([
-        frDate(r.date), csvText(r.immat), csvText(r.marque), csvText(r.modele),
-        csvNum(r.prix), csvNum(r.litres), csvNum(r.ht), csvNum(r.ttc), csvNum(r.km),
+        frDate(r.date), csvText(r.immat), csvText(r.marque), csvText(r.modele), csvText(r.moniteur),
+        csvNum(r.prix), csvNum(r.litres), csvNum(r.ht), csvNum(r.ttc), csvNum(r.km), csvNum(r.conso),
       ].join(';'));
     });
     const blob = new Blob(['\uFEFF' + lines.join('\r\n')], { type: 'text/csv;charset=utf-8' });
@@ -509,7 +962,7 @@
     return Math.round((Date.UTC(y, m - 1, d) - Date.UTC(1899, 11, 30)) / 86400000);
   }
 
-  const COL_LETTERS = ['A', 'B', 'C', 'D', 'E', 'F', 'G', 'H', 'I'];
+  const COL_LETTERS = ['A', 'B', 'C', 'D', 'E', 'F', 'G', 'H', 'I', 'J', 'K'];
 
   function buildSheetXml(rows) {
     const cell = (col, row, xml) => `<c r="${COL_LETTERS[col]}${row}"${xml}</c>`;
@@ -524,7 +977,7 @@
       '<worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main">' +
       '<sheetViews><sheetView workbookViewId="0"><pane ySplit="1" topLeftCell="A2" activePane="bottomLeft" state="frozen"/></sheetView></sheetViews>' +
       '<cols>' +
-      [12, 18, 15, 15, 16, 10, 14, 14, 18]
+      [12, 18, 15, 15, 18, 16, 10, 14, 14, 16, 16]
         .map((w, i) => `<col min="${i + 1}" max="${i + 1}" width="${w}" customWidth="1"/>`)
         .join('') +
       '</cols><sheetData>';
@@ -539,11 +992,13 @@
         str(1, rowNum, r.immat) +
         str(2, rowNum, r.marque) +
         str(3, rowNum, r.modele) +
-        num(4, rowNum, r.prix, 4) +   // 0.000
-        num(5, rowNum, r.litres, 3) + // 0.00
-        num(6, rowNum, r.ht, 3) +
-        num(7, rowNum, r.ttc, 3) +
-        num(8, rowNum, r.km) +
+        str(4, rowNum, r.moniteur) +
+        num(5, rowNum, r.prix, 4) +   // 0.000
+        num(6, rowNum, r.litres, 3) + // 0.00
+        num(7, rowNum, r.ht, 3) +
+        num(8, rowNum, r.ttc, 3) +
+        num(9, rowNum, r.km) +
+        num(10, rowNum, r.conso, 3) +
         '</row>';
     });
 
@@ -680,6 +1135,54 @@
     ]);
     download(exportFilename('xlsx'), blob);
     toast('📥 Export Excel téléchargé.');
+  });
+
+  // ---------------------------------------------------------
+  // Sauvegarde / restauration complète (fichier JSON)
+  // ---------------------------------------------------------
+
+  $('#backup-save').addEventListener('click', () => {
+    const payload = {
+      app: 'hellopermis-carburant',
+      version: 1,
+      exportedAt: new Date().toISOString(),
+      vehicles: state.vehicles,
+      moniteurs: state.moniteurs,
+      fills: state.fills,
+      settings: state.settings,
+    };
+    const blob = new Blob([JSON.stringify(payload, null, 2)], { type: 'application/json' });
+    download(`sauvegarde-carburant_${todayISO()}.json`, blob);
+    toast('💾 Sauvegarde téléchargée. Conservez ce fichier précieusement.');
+  });
+
+  $('#backup-restore').addEventListener('click', () => $('#backup-file').click());
+
+  $('#backup-file').addEventListener('change', (e) => {
+    const file = e.target.files && e.target.files[0];
+    e.target.value = '';
+    if (!file) return;
+    file.text().then((text) => {
+      const data = JSON.parse(text);
+      if (!data || !Array.isArray(data.vehicles) || !Array.isArray(data.fills)) throw new Error('format');
+      const moniteurs = Array.isArray(data.moniteurs) ? data.moniteurs : [];
+      const ok = confirm(
+        'Restaurer cette sauvegarde ?\n\n' +
+        `${data.vehicles.length} véhicule(s) · ${moniteurs.length} moniteur(s) · ${data.fills.length} plein(s)\n\n` +
+        '⚠️ Les données actuelles de ce navigateur seront remplacées.');
+      if (!ok) return;
+      state.vehicles = data.vehicles;
+      state.moniteurs = moniteurs;
+      state.fills = data.fills;
+      state.settings = Object.assign({ tva: 20 }, data.settings);
+      saveState();
+      resetVehicleForm();
+      resetMoniteurForm();
+      resetFillForm();
+      tvaInput.value = state.settings.tva;
+      renderAll();
+      toast('♻️ Données restaurées.');
+    }).catch(() => toast('⚠️ Fichier de sauvegarde invalide.'));
   });
 
   // ---------------------------------------------------------

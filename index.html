@@ -4,7 +4,7 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Suivi Carburant — HelloPermis</title>
-  <meta name="description" content="Suivi du carburant des véhicules de l'auto-école : véhicules, pleins, exports CSV et Excel.">
+  <meta name="description" content="Suivi du carburant des véhicules de l'auto-école : véhicules, moniteurs, pleins, exports CSV et Excel.">
   <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Ctext y='0.9em' font-size='90'%3E%E2%9B%BD%3C/text%3E%3C/svg%3E">
   <link rel="stylesheet" href="styles.css">
 </head>
@@ -22,6 +22,7 @@
       <nav class="tabs" role="tablist" aria-label="Navigation">
         <button type="button" class="tab active" data-view="suivi" role="tab" aria-selected="true">⛽ Suivi des pleins</button>
         <button type="button" class="tab" data-view="vehicules" role="tab" aria-selected="false">🚗 Véhicules</button>
+        <button type="button" class="tab" data-view="moniteurs" role="tab" aria-selected="false">👤 Moniteurs</button>
       </nav>
     </div>
   </header>
@@ -49,16 +50,20 @@
               <select id="fill-vehicle" required></select>
             </div>
             <div class="field">
+              <label for="fill-moniteur">Moniteur</label>
+              <select id="fill-moniteur"></select>
+            </div>
+            <div class="field">
+              <label for="fill-km">Kilométrage (km) *</label>
+              <input type="number" id="fill-km" min="0" step="1" placeholder="45 210" required>
+            </div>
+            <div class="field">
               <label for="fill-prix">Prix au litre (€) *</label>
               <input type="number" id="fill-prix" min="0" step="0.001" placeholder="1.859" required>
             </div>
             <div class="field">
               <label for="fill-litres">Litres *</label>
               <input type="number" id="fill-litres" min="0" step="0.001" placeholder="40" required>
-            </div>
-            <div class="field">
-              <label for="fill-tva">TVA (%)</label>
-              <input type="number" id="fill-tva" min="0" max="100" step="0.1" value="20">
             </div>
             <div class="field">
               <label for="fill-ht">Total HT (€) *</label>
@@ -68,14 +73,13 @@
               <label for="fill-ttc">Total TTC (€) *</label>
               <input type="number" id="fill-ttc" min="0" step="0.01" placeholder="auto" required>
             </div>
-            <div class="field">
-              <label for="fill-km">Kilométrage (km) *</label>
-              <input type="number" id="fill-km" min="0" step="1" placeholder="45 210" required>
-            </div>
           </div>
           <div class="form-actions">
             <button type="submit" class="btn btn-primary" id="fill-submit">Ajouter le plein</button>
             <button type="button" class="btn btn-secondary hidden" id="fill-cancel">Annuler</button>
+            <label class="tva-inline" for="fill-tva">TVA
+              <input type="number" id="fill-tva" min="0" max="100" step="0.1" value="20"> %
+            </label>
             <p class="form-hint">💡 Les totaux TTC et HT se calculent automatiquement (prix × litres, TVA déduite) et restent modifiables.</p>
           </div>
         </form>
@@ -86,6 +90,9 @@
           <label class="toolbar-label" for="filter-vehicle">Filtres</label>
           <select id="filter-vehicle" aria-label="Filtrer par véhicule">
             <option value="">Tous les véhicules</option>
+          </select>
+          <select id="filter-moniteur" aria-label="Filtrer par moniteur">
+            <option value="">Tous les moniteurs</option>
           </select>
           <input type="month" id="filter-month" aria-label="Filtrer par mois">
           <button type="button" class="link-btn hidden" id="filter-reset">✕ Réinitialiser</button>
@@ -115,6 +122,18 @@
         </div>
       </section>
 
+      <section class="card chart-card hidden" id="chart-card">
+        <div class="chart-head">
+          <h2>Dépenses par mois <span class="chart-sub">(TTC)</span></h2>
+          <div class="chart-legend" id="chart-legend"></div>
+        </div>
+        <p class="chart-note hidden" id="chart-note">Affichage limité aux 12 derniers mois — exportez pour l'historique complet.</p>
+        <div class="chart-wrap">
+          <div id="chart-svg"></div>
+          <div class="chart-tip hidden" id="chart-tip"></div>
+        </div>
+      </section>
+
       <section class="card table-card">
         <div class="table-scroll">
           <table id="fills-table">
@@ -122,11 +141,13 @@
               <tr>
                 <th>Date</th>
                 <th>Véhicule</th>
+                <th>Moniteur</th>
                 <th class="num">Prix / L</th>
                 <th class="num">Litres</th>
                 <th class="num">Total HT</th>
                 <th class="num">Total TTC</th>
                 <th class="num">Kilométrage</th>
+                <th class="num" title="Consommation depuis le plein précédent du véhicule">Conso</th>
                 <th class="actions"><span class="sr-only">Actions</span></th>
               </tr>
             </thead>
@@ -174,7 +195,9 @@
                 <th>Marque</th>
                 <th>Modèle</th>
                 <th class="num">Pleins</th>
-                <th class="num">Dernier kilométrage</th>
+                <th class="num">Dernier km</th>
+                <th class="num" title="Consommation moyenne calculée entre le premier et le dernier plein">Conso moyenne</th>
+                <th class="num" title="Coût carburant TTC par kilomètre parcouru">Coût / km</th>
                 <th class="actions"><span class="sr-only">Actions</span></th>
               </tr>
             </thead>
@@ -186,11 +209,55 @@
 
     </section>
 
+    <!-- ===================== VUE : MONITEURS ===================== -->
+    <section id="view-moniteurs" class="view hidden">
+
+      <section class="card">
+        <h2 id="moniteur-form-title">Ajouter un moniteur</h2>
+        <form id="moniteur-form" autocomplete="off" novalidate>
+          <div class="form-grid">
+            <div class="field">
+              <label for="mon-nom">Nom du moniteur *</label>
+              <input type="text" id="mon-nom" placeholder="Julien Martin" maxlength="60" required>
+            </div>
+          </div>
+          <div class="form-actions">
+            <button type="submit" class="btn btn-primary" id="moniteur-submit">Ajouter le moniteur</button>
+            <button type="button" class="btn btn-secondary hidden" id="moniteur-cancel">Annuler</button>
+            <p class="form-hint">👤 Les moniteurs ajoutés ici apparaissent dans la liste « Moniteur » du formulaire de plein.</p>
+          </div>
+        </form>
+      </section>
+
+      <section class="card table-card">
+        <div class="table-scroll">
+          <table id="moniteurs-table">
+            <thead>
+              <tr>
+                <th>Nom</th>
+                <th class="num">Pleins</th>
+                <th class="num">Total TTC</th>
+                <th class="actions"><span class="sr-only">Actions</span></th>
+              </tr>
+            </thead>
+            <tbody id="moniteurs-tbody"></tbody>
+          </table>
+        </div>
+        <p class="empty hidden" id="moniteurs-empty">Aucun moniteur. Ajoutez le premier ci-dessus. 👤</p>
+      </section>
+
+    </section>
+
   </main>
 
   <footer class="app-footer">
-    <div class="container">
-      💾 Les données sont enregistrées automatiquement dans ce navigateur. Pensez à exporter régulièrement (CSV / Excel) pour garder une copie.
+    <div class="container footer-inner">
+      <span>💾 Les données sont enregistrées automatiquement dans ce navigateur.</span>
+      <span class="footer-actions">
+        <button type="button" class="link-btn" id="backup-save">💾 Sauvegarder les données</button>
+        <button type="button" class="link-btn" id="backup-restore">♻️ Restaurer une sauvegarde</button>
+        <input type="file" id="backup-file" accept=".json,application/json" class="hidden">
+      </span>
     </div>
   </footer>
 
