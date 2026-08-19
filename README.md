@@ -5,17 +5,21 @@ Aucune installation, aucun serveur : tout fonctionne directement dans le navigat
 
 ## Fonctionnalités
 
-### 🚗 Véhicules
-- Ajout, modification et suppression des voitures : **immatriculation**, **marque**, **modèle**, **type de carburant** (Gazole, SP95-E10, SP95, SP98, E85, GPL)
+### 🗂️ Base de renseignements (véhicules + moniteurs)
+Un seul onglet regroupe les informations de référence de l'auto-école.
+
+**🚗 Véhicules**
+- Ajout, modification et suppression des voitures : **immatriculation**, **marque**, **modèle**, **type de carburant** (Gazole, SP95-E10, SP95, SP98, E85, GPL) et **moniteur attitré**
+- Chaque voiture est associée à son moniteur habituel — modifiable à tout moment si la voiture change de moniteur
 - Détection des immatriculations en double
 - Par véhicule : nombre de pleins, dernier kilométrage, **consommation moyenne (L/100 km)** et **coût carburant par km**
 - Le carburant du véhicule sélectionné est **rappelé dans le formulaire de plein** (évite les erreurs à la pompe)
 
-### 👤 Moniteurs
+**👤 Moniteurs**
 - Base de moniteurs gérée directement dans l'application (ajout, renommage, suppression)
-- Les moniteurs apparaissent dans la liste déroulante du formulaire de plein
+- Dans le formulaire de plein, le moniteur est **prérempli automatiquement** avec le moniteur attitré du véhicule choisi (et reste modifiable au cas par cas)
 - Par moniteur : nombre de pleins effectués et total TTC
-- La suppression d'un moniteur **conserve** ses pleins (ils deviennent « sans moniteur »)
+- La suppression d'un moniteur **conserve** ses pleins (ils deviennent « sans moniteur ») et détache ses véhicules
 
 ### ⛽ Suivi des pleins
 Pour chaque plein :
@@ -30,7 +34,7 @@ Pour chaque plein :
 
 Avec en plus :
 - ⚠️ **Alerte kilométrage** : avertissement si le kilométrage saisi est incohérent avec les autres relevés du véhicule (faute de frappe)
-- 📊 **Graphique des dépenses par mois** (TTC, empilées par véhicule, 12 derniers mois)
+- 📊 Bouton **« Analyse »** : affiche à la demande le graphique des dépenses par mois (TTC, empilées par véhicule, 12 derniers mois)
 - Filtres par véhicule, par moniteur et par mois — appliqués aux statistiques, au graphique, au tableau et aux exports
 - Statistiques instantanées : nombre de pleins, litres, totaux HT et TTC
 - Modification et suppression de chaque plein
@@ -65,7 +69,7 @@ Ouvrez simplement le fichier `index.html` dans votre navigateur (double-clic). C
 ## Structure du projet
 
 ```
-index.html   — structure de l'application (3 onglets : Suivi des pleins / Véhicules / Moniteurs)
+index.html   — structure de l'application (2 onglets : Suivi des pleins / Base de renseignements)
 styles.css   — mise en forme (design simple, responsive mobile)
 app.js       — logique : données, calculs HT/TTC et consommation, graphique, exports CSV/XLSX, sauvegarde
 ```

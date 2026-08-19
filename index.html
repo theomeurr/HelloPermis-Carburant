@@ -21,8 +21,7 @@
       </div>
       <nav class="tabs" role="tablist" aria-label="Navigation">
         <button type="button" class="tab active" data-view="suivi" role="tab" aria-selected="true">⛽ Suivi des pleins</button>
-        <button type="button" class="tab" data-view="vehicules" role="tab" aria-selected="false">🚗 Véhicules</button>
-        <button type="button" class="tab" data-view="moniteurs" role="tab" aria-selected="false">👤 Moniteurs</button>
+        <button type="button" class="tab" data-view="base" role="tab" aria-selected="false">🗂️ Base de renseignements</button>
       </nav>
     </div>
   </header>
@@ -81,7 +80,7 @@
             <label class="tva-inline" for="fill-tva">TVA
               <input type="number" id="fill-tva" min="0" max="100" step="0.1" value="20"> %
             </label>
-            <p class="form-hint">💡 Les totaux TTC et HT se calculent automatiquement (prix × litres, TVA déduite) et restent modifiables.</p>
+            <p class="form-hint">💡 Totaux TTC et HT calculés automatiquement (modifiables) · le moniteur se préremplit avec celui attitré au véhicule.</p>
           </div>
         </form>
       </section>
@@ -99,6 +98,7 @@
           <button type="button" class="link-btn hidden" id="filter-reset">✕ Réinitialiser</button>
         </div>
         <div class="toolbar-exports">
+          <button type="button" class="btn btn-secondary" id="toggle-chart" aria-pressed="false" title="Afficher ou masquer le graphique des dépenses par mois">📊 Analyse</button>
           <button type="button" class="btn btn-secondary" id="export-csv" title="Exporter les pleins affichés au format CSV">📥 Export CSV</button>
           <button type="button" class="btn btn-secondary" id="export-xlsx" title="Exporter les pleins affichés au format Excel">📥 Export Excel</button>
         </div>
@@ -160,8 +160,10 @@
 
     </section>
 
-    <!-- ===================== VUE : VÉHICULES ===================== -->
-    <section id="view-vehicules" class="view hidden">
+    <!-- ============ VUE : BASE DE RENSEIGNEMENTS (véhicules + moniteurs) ============ -->
+    <section id="view-base" class="view hidden">
+
+      <h2 class="section-heading">🚗 Véhicules</h2>
 
       <section class="card">
         <h2 id="vehicle-form-title">Ajouter un véhicule</h2>
@@ -191,6 +193,12 @@
                 <option>GPL</option>
               </select>
             </div>
+            <div class="field">
+              <label for="veh-moniteur">Moniteur attitré</label>
+              <select id="veh-moniteur">
+                <option value="">— Aucun —</option>
+              </select>
+            </div>
           </div>
           <div class="form-actions">
             <button type="submit" class="btn btn-primary" id="vehicle-submit">Ajouter le véhicule</button>
@@ -205,12 +213,12 @@
             <thead>
               <tr>
                 <th>Immatriculation</th>
-                <th>Marque</th>
-                <th>Modèle</th>
+                <th>Véhicule</th>
                 <th>Carburant</th>
+                <th title="Moniteur attitré au véhicule">Attitré à</th>
                 <th class="num">Pleins</th>
                 <th class="num">Dernier km</th>
-                <th class="num" title="Consommation moyenne calculée entre le premier et le dernier plein">Conso moyenne</th>
+                <th class="num" title="Consommation moyenne calculée entre le premier et le dernier plein">Conso</th>
                 <th class="num" title="Coût carburant TTC par kilomètre parcouru">Coût / km</th>
                 <th class="actions"><span class="sr-only">Actions</span></th>
               </tr>
@@ -221,10 +229,7 @@
         <p class="empty hidden" id="vehicles-empty">Aucun véhicule. Ajoutez votre première voiture ci-dessus. 🚗</p>
       </section>
 
-    </section>
-
-    <!-- ===================== VUE : MONITEURS ===================== -->
-    <section id="view-moniteurs" class="view hidden">
+      <h2 class="section-heading">👤 Moniteurs</h2>
 
       <section class="card">
         <h2 id="moniteur-form-title">Ajouter un moniteur</h2>
@@ -238,7 +243,7 @@
           <div class="form-actions">
             <button type="submit" class="btn btn-primary" id="moniteur-submit">Ajouter le moniteur</button>
             <button type="button" class="btn btn-secondary hidden" id="moniteur-cancel">Annuler</button>
-            <p class="form-hint">👤 Les moniteurs ajoutés ici apparaissent dans la liste « Moniteur » du formulaire de plein.</p>
+            <p class="form-hint">👤 Les moniteurs ajoutés ici peuvent être attitrés à un véhicule et apparaissent dans la liste « Moniteur » du formulaire de plein.</p>
           </div>
         </form>
       </section>

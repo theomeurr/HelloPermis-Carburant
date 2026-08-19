@@ -173,7 +173,7 @@
   // Navigation par onglets
   // ---------------------------------------------------------
 
-  const VIEWS = { suivi: '#view-suivi', vehicules: '#view-vehicules', moniteurs: '#view-moniteurs' };
+  const VIEWS = { suivi: '#view-suivi', base: '#view-base' };
 
   function switchView(view) {
     document.querySelectorAll('.tab').forEach((btn) => {
@@ -189,7 +189,7 @@
     btn.addEventListener('click', () => switchView(btn.dataset.view)));
 
   $('#notice-add-vehicle').addEventListener('click', () => {
-    switchView('vehicules');
+    switchView('base');
     $('#veh-immat').focus();
   });
 
@@ -213,6 +213,7 @@
     const marque = $('#veh-marque').value.trim();
     const modele = $('#veh-modele').value.trim();
     const carburant = $('#veh-carburant').value;
+    const moniteurId = $('#veh-moniteur').value || null;
 
     if (!immat || !marque || !modele) {
       toast('Merci de renseigner l’immatriculation, la marque et le modèle.');
@@ -231,10 +232,10 @@
 
     if (editingVehicleId) {
       const v = vehicleById(editingVehicleId);
-      if (v) Object.assign(v, { immat, marque, modele, carburant });
+      if (v) Object.assign(v, { immat, marque, modele, carburant, moniteurId });
       toast('✅ Véhicule modifié.');
     } else {
-      state.vehicles.push({ id: uid(), immat, marque, modele, carburant, createdAt: Date.now() });
+      state.vehicles.push({ id: uid(), immat, marque, modele, carburant, moniteurId, createdAt: Date.now() });
       toast(`✅ Véhicule ${immat} ajouté.`);
     }
     saveState();
@@ -256,6 +257,7 @@
       $('#veh-marque').value = v.marque;
       $('#veh-modele').value = v.modele;
       $('#veh-carburant').value = v.carburant || '';
+      $('#veh-moniteur').value = (v.moniteurId && moniteurById(v.moniteurId)) ? v.moniteurId : '';
       $('#vehicle-form-title').textContent = `Modifier le véhicule ${v.immat}`;
       $('#vehicle-submit').textContent = 'Enregistrer les modifications';
       $('#vehicle-cancel').classList.remove('hidden');
@@ -286,11 +288,12 @@
       const fills = state.fills.filter((f) => f.vehicleId === v.id);
       const lastKm = fills.length ? Math.max(...fills.map((f) => f.km || 0)) : null;
       const avg = vehicleAverages(v.id);
+      const attitre = v.moniteurId ? moniteurById(v.moniteurId) : null;
       return `<tr>
         <td><span class="plate">${esc(v.immat)}</span></td>
-        <td>${esc(v.marque)}</td>
-        <td>${esc(v.modele)}</td>
+        <td>${esc([v.marque, v.modele].filter(Boolean).join(' '))}</td>
         <td>${fuelTag(v.carburant)}</td>
+        <td>${attitre ? '👤 ' + esc(attitre.nom) : '<span class="muted-cell">—</span>'}</td>
         <td class="num">${fills.length}</td>
         <td class="num">${lastKm != null ? nfInt.format(lastKm) + ' km' : '<span class="muted-cell">—</span>'}</td>
         <td class="num">${avg ? nfCons.format(avg.conso) + ' L/100' : '<span class="muted-cell">—</span>'}</td>
@@ -365,13 +368,15 @@
     }
 
     if (btn.dataset.action === 'delete') {
-      const linked = state.fills.filter((f) => f.moniteurId === m.id).length;
-      const msg = linked
-        ? `Supprimer le moniteur ${m.nom} ?\n\nLes ${linked} plein(s) associé(s) seront conservés, sans moniteur.`
-        : `Supprimer le moniteur ${m.nom} ?`;
+      const linkedFills = state.fills.filter((f) => f.moniteurId === m.id).length;
+      const linkedVehicles = state.vehicles.filter((v) => v.moniteurId === m.id).length;
+      let msg = `Supprimer le moniteur ${m.nom} ?`;
+      if (linkedFills) msg += `\n\nLes ${linkedFills} plein(s) associé(s) seront conservés, sans moniteur.`;
+      if (linkedVehicles) msg += `\n\n${linkedVehicles} véhicule(s) attitré(s) à ce moniteur resteront sans moniteur attitré.`;
       if (!confirm(msg)) return;
       state.moniteurs = state.moniteurs.filter((x) => x.id !== m.id);
       state.fills.forEach((f) => { if (f.moniteurId === m.id) f.moniteurId = null; });
+      state.vehicles.forEach((v) => { if (v.moniteurId === m.id) v.moniteurId = null; });
       if (editingMoniteurId === m.id) resetMoniteurForm();
       saveState();
       renderAll();
@@ -412,6 +417,11 @@
     const prevFilter = filterSelect.value;
     filterSelect.innerHTML = `<option value="">Tous les moniteurs</option>${options}`;
     if ([...filterSelect.options].some((o) => o.value === prevFilter)) filterSelect.value = prevFilter;
+
+    const vehSelect = $('#veh-moniteur');
+    const prevVeh = vehSelect.value;
+    vehSelect.innerHTML = `<option value="">— Aucun —</option>${options}`;
+    if ([...vehSelect.options].some((o) => o.value === prevVeh)) vehSelect.value = prevVeh;
   }
 
   // ---------------------------------------------------------
@@ -619,7 +629,12 @@
     }
   }
 
-  $('#fill-vehicle').addEventListener('change', updateFuelHint);
+  // Au changement de véhicule : préremplit le moniteur attitré et le rappel carburant
+  $('#fill-vehicle').addEventListener('change', () => {
+    const v = vehicleById($('#fill-vehicle').value);
+    $('#fill-moniteur').value = (v && v.moniteurId && moniteurById(v.moniteurId)) ? v.moniteurId : '';
+    updateFuelHint();
+  });
 
   function renderFills() {
     const rows = filteredFills();
@@ -686,6 +701,7 @@
   const CHART_OTHER = '#898781';
 
   let lastChartRows = [];
+  let chartOpen = false; // le graphique est masqué par défaut, derrière le bouton « Analyse »
 
   function tickStep(max) {
     const target = Math.max(max / 4, 1e-9);
@@ -710,7 +726,7 @@
     const tip = $('#chart-tip');
     tip.classList.add('hidden');
 
-    if (!rows.length) {
+    if (!rows.length || !chartOpen) {
       card.classList.add('hidden');
       host.innerHTML = '';
       legend.innerHTML = '';
@@ -907,6 +923,19 @@
       hit.addEventListener('blur', hideTip);
     });
   }
+
+  const chartToggle = $('#toggle-chart');
+  chartToggle.addEventListener('click', () => {
+    chartOpen = !chartOpen;
+    chartToggle.classList.toggle('active', chartOpen);
+    chartToggle.setAttribute('aria-pressed', String(chartOpen));
+    renderChart(lastChartRows);
+    if (chartOpen && lastChartRows.length) {
+      $('#chart-card').scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+    } else if (chartOpen) {
+      toast('Aucun plein à analyser pour le moment.');
+    }
+  });
 
   let resizeTimer = null;
   window.addEventListener('resize', () => {
