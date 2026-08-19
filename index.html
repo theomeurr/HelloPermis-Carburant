@@ -1,0 +1,201 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Suivi Carburant — HelloPermis</title>
+  <meta name="description" content="Suivi du carburant des véhicules de l'auto-école : véhicules, pleins, exports CSV et Excel.">
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Ctext y='0.9em' font-size='90'%3E%E2%9B%BD%3C/text%3E%3C/svg%3E">
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+
+  <header class="app-header">
+    <div class="container header-inner">
+      <div class="brand">
+        <span class="brand-icon" aria-hidden="true">⛽</span>
+        <div>
+          <h1>Suivi carburant</h1>
+          <p class="brand-sub">HelloPermis · Auto-école</p>
+        </div>
+      </div>
+      <nav class="tabs" role="tablist" aria-label="Navigation">
+        <button type="button" class="tab active" data-view="suivi" role="tab" aria-selected="true">⛽ Suivi des pleins</button>
+        <button type="button" class="tab" data-view="vehicules" role="tab" aria-selected="false">🚗 Véhicules</button>
+      </nav>
+    </div>
+  </header>
+
+  <main class="container">
+
+    <!-- ===================== VUE : SUIVI DES PLEINS ===================== -->
+    <section id="view-suivi" class="view">
+
+      <div id="no-vehicle-notice" class="notice hidden">
+        <span>🚗 Commencez par ajouter un véhicule pour pouvoir enregistrer un plein.</span>
+        <button type="button" class="btn btn-primary btn-sm" id="notice-add-vehicle">Ajouter un véhicule</button>
+      </div>
+
+      <section class="card">
+        <h2 id="fill-form-title">Ajouter un plein</h2>
+        <form id="fill-form" autocomplete="off" novalidate>
+          <div class="form-grid">
+            <div class="field">
+              <label for="fill-date">Date *</label>
+              <input type="date" id="fill-date" required>
+            </div>
+            <div class="field">
+              <label for="fill-vehicle">Véhicule *</label>
+              <select id="fill-vehicle" required></select>
+            </div>
+            <div class="field">
+              <label for="fill-prix">Prix au litre (€) *</label>
+              <input type="number" id="fill-prix" min="0" step="0.001" placeholder="1.859" required>
+            </div>
+            <div class="field">
+              <label for="fill-litres">Litres *</label>
+              <input type="number" id="fill-litres" min="0" step="0.001" placeholder="40" required>
+            </div>
+            <div class="field">
+              <label for="fill-tva">TVA (%)</label>
+              <input type="number" id="fill-tva" min="0" max="100" step="0.1" value="20">
+            </div>
+            <div class="field">
+              <label for="fill-ht">Total HT (€) *</label>
+              <input type="number" id="fill-ht" min="0" step="0.01" placeholder="auto" required>
+            </div>
+            <div class="field">
+              <label for="fill-ttc">Total TTC (€) *</label>
+              <input type="number" id="fill-ttc" min="0" step="0.01" placeholder="auto" required>
+            </div>
+            <div class="field">
+              <label for="fill-km">Kilométrage (km) *</label>
+              <input type="number" id="fill-km" min="0" step="1" placeholder="45 210" required>
+            </div>
+          </div>
+          <div class="form-actions">
+            <button type="submit" class="btn btn-primary" id="fill-submit">Ajouter le plein</button>
+            <button type="button" class="btn btn-secondary hidden" id="fill-cancel">Annuler</button>
+            <p class="form-hint">💡 Les totaux TTC et HT se calculent automatiquement (prix × litres, TVA déduite) et restent modifiables.</p>
+          </div>
+        </form>
+      </section>
+
+      <section class="toolbar">
+        <div class="toolbar-filters">
+          <label class="toolbar-label" for="filter-vehicle">Filtres</label>
+          <select id="filter-vehicle" aria-label="Filtrer par véhicule">
+            <option value="">Tous les véhicules</option>
+          </select>
+          <input type="month" id="filter-month" aria-label="Filtrer par mois">
+          <button type="button" class="link-btn hidden" id="filter-reset">✕ Réinitialiser</button>
+        </div>
+        <div class="toolbar-exports">
+          <button type="button" class="btn btn-secondary" id="export-csv" title="Exporter les pleins affichés au format CSV">📥 Export CSV</button>
+          <button type="button" class="btn btn-secondary" id="export-xlsx" title="Exporter les pleins affichés au format Excel">📥 Export Excel</button>
+        </div>
+      </section>
+
+      <section class="stats" aria-label="Résumé">
+        <div class="stat">
+          <div class="stat-label">Pleins</div>
+          <div class="stat-value" id="stat-count">0</div>
+        </div>
+        <div class="stat">
+          <div class="stat-label">Litres</div>
+          <div class="stat-value" id="stat-litres">0 L</div>
+        </div>
+        <div class="stat">
+          <div class="stat-label">Total HT</div>
+          <div class="stat-value" id="stat-ht">0,00 €</div>
+        </div>
+        <div class="stat">
+          <div class="stat-label">Total TTC</div>
+          <div class="stat-value" id="stat-ttc">0,00 €</div>
+        </div>
+      </section>
+
+      <section class="card table-card">
+        <div class="table-scroll">
+          <table id="fills-table">
+            <thead>
+              <tr>
+                <th>Date</th>
+                <th>Véhicule</th>
+                <th class="num">Prix / L</th>
+                <th class="num">Litres</th>
+                <th class="num">Total HT</th>
+                <th class="num">Total TTC</th>
+                <th class="num">Kilométrage</th>
+                <th class="actions"><span class="sr-only">Actions</span></th>
+              </tr>
+            </thead>
+            <tbody id="fills-tbody"></tbody>
+          </table>
+        </div>
+        <p class="empty hidden" id="fills-empty">Aucun plein enregistré pour le moment.</p>
+      </section>
+
+    </section>
+
+    <!-- ===================== VUE : VÉHICULES ===================== -->
+    <section id="view-vehicules" class="view hidden">
+
+      <section class="card">
+        <h2 id="vehicle-form-title">Ajouter un véhicule</h2>
+        <form id="vehicle-form" autocomplete="off" novalidate>
+          <div class="form-grid">
+            <div class="field">
+              <label for="veh-immat">Immatriculation *</label>
+              <input type="text" id="veh-immat" class="input-immat" placeholder="AB-123-CD" maxlength="20" required>
+            </div>
+            <div class="field">
+              <label for="veh-marque">Marque *</label>
+              <input type="text" id="veh-marque" placeholder="Renault" maxlength="40" required>
+            </div>
+            <div class="field">
+              <label for="veh-modele">Modèle *</label>
+              <input type="text" id="veh-modele" placeholder="Clio 5" maxlength="40" required>
+            </div>
+          </div>
+          <div class="form-actions">
+            <button type="submit" class="btn btn-primary" id="vehicle-submit">Ajouter le véhicule</button>
+            <button type="button" class="btn btn-secondary hidden" id="vehicle-cancel">Annuler</button>
+          </div>
+        </form>
+      </section>
+
+      <section class="card table-card">
+        <div class="table-scroll">
+          <table id="vehicles-table">
+            <thead>
+              <tr>
+                <th>Immatriculation</th>
+                <th>Marque</th>
+                <th>Modèle</th>
+                <th class="num">Pleins</th>
+                <th class="num">Dernier kilométrage</th>
+                <th class="actions"><span class="sr-only">Actions</span></th>
+              </tr>
+            </thead>
+            <tbody id="vehicles-tbody"></tbody>
+          </table>
+        </div>
+        <p class="empty hidden" id="vehicles-empty">Aucun véhicule. Ajoutez votre première voiture ci-dessus. 🚗</p>
+      </section>
+
+    </section>
+
+  </main>
+
+  <footer class="app-footer">
+    <div class="container">
+      💾 Les données sont enregistrées automatiquement dans ce navigateur. Pensez à exporter régulièrement (CSV / Excel) pour garder une copie.
+    </div>
+  </footer>
+
+  <div id="toast" role="status" aria-live="polite"></div>
+
+  <script src="app.js"></script>
+</body>
+</html>
