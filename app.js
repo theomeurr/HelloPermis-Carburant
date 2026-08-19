@@ -94,6 +94,20 @@
   const vehicleLabel = (v) =>
     `${v.immat} — ${[v.marque, v.modele].filter(Boolean).join(' ')}`.replace(/ — $/, '');
 
+  // Pastille du type de carburant (couleurs repères des pistolets : jaune
+  // gazole, vert essence, bleu E85)
+  const FUEL_CLASS = {
+    'Gazole': 'fuel-gazole',
+    'SP95-E10': 'fuel-essence',
+    'SP95': 'fuel-essence',
+    'SP98': 'fuel-essence',
+    'E85': 'fuel-e85',
+    'GPL': 'fuel-gpl',
+  };
+  const fuelTag = (c) => c
+    ? `<span class="fuel-tag ${FUEL_CLASS[c] || ''}">${esc(c)}</span>`
+    : '<span class="muted-cell">—</span>';
+
   let editingVehicleId = null;
   let editingMoniteurId = null;
   let editingFillId = null;
@@ -198,9 +212,14 @@
     const immat = $('#veh-immat').value.trim().toUpperCase();
     const marque = $('#veh-marque').value.trim();
     const modele = $('#veh-modele').value.trim();
+    const carburant = $('#veh-carburant').value;
 
     if (!immat || !marque || !modele) {
       toast('Merci de renseigner l’immatriculation, la marque et le modèle.');
+      return;
+    }
+    if (!carburant) {
+      toast('Merci de choisir le type de carburant du véhicule.');
       return;
     }
     const duplicate = state.vehicles.some(
@@ -212,10 +231,10 @@
 
     if (editingVehicleId) {
       const v = vehicleById(editingVehicleId);
-      if (v) Object.assign(v, { immat, marque, modele });
+      if (v) Object.assign(v, { immat, marque, modele, carburant });
       toast('✅ Véhicule modifié.');
     } else {
-      state.vehicles.push({ id: uid(), immat, marque, modele, createdAt: Date.now() });
+      state.vehicles.push({ id: uid(), immat, marque, modele, carburant, createdAt: Date.now() });
       toast(`✅ Véhicule ${immat} ajouté.`);
     }
     saveState();
@@ -236,6 +255,7 @@
       $('#veh-immat').value = v.immat;
       $('#veh-marque').value = v.marque;
       $('#veh-modele').value = v.modele;
+      $('#veh-carburant').value = v.carburant || '';
       $('#vehicle-form-title').textContent = `Modifier le véhicule ${v.immat}`;
       $('#vehicle-submit').textContent = 'Enregistrer les modifications';
       $('#vehicle-cancel').classList.remove('hidden');
@@ -270,6 +290,7 @@
         <td><span class="plate">${esc(v.immat)}</span></td>
         <td>${esc(v.marque)}</td>
         <td>${esc(v.modele)}</td>
+        <td>${fuelTag(v.carburant)}</td>
         <td class="num">${fills.length}</td>
         <td class="num">${lastKm != null ? nfInt.format(lastKm) + ' km' : '<span class="muted-cell">—</span>'}</td>
         <td class="num">${avg ? nfCons.format(avg.conso) + ' L/100' : '<span class="muted-cell">—</span>'}</td>
@@ -452,6 +473,7 @@
     $('#fill-date').value = keepDate;
     $('#fill-vehicle').value = keepVehicle;
     $('#fill-moniteur').value = keepMoniteur;
+    updateFuelHint();
     tvaInput.value = state.settings.tva;
     $('#fill-form-title').textContent = 'Ajouter un plein';
     $('#fill-submit').textContent = 'Ajouter le plein';
@@ -507,6 +529,7 @@
       editingFillId = f.id;
       $('#fill-date').value = f.date;
       $('#fill-vehicle').value = f.vehicleId;
+      updateFuelHint();
       $('#fill-moniteur').value = f.moniteurId || '';
       prixInput.value = f.prix;
       litresInput.value = f.litres;
@@ -581,7 +604,22 @@
 
     $('#no-vehicle-notice').classList.toggle('hidden', sorted.length > 0);
     $('#fill-submit').disabled = sorted.length === 0;
+    updateFuelHint();
   }
+
+  // Rappel du carburant du véhicule sélectionné (évite les erreurs à la pompe)
+  function updateFuelHint() {
+    const hint = $('#veh-fuel-hint');
+    const v = vehicleById($('#fill-vehicle').value);
+    if (v && v.carburant) {
+      hint.innerHTML = `⛽ Carburant : ${fuelTag(v.carburant)}`;
+      hint.classList.remove('hidden');
+    } else {
+      hint.classList.add('hidden');
+    }
+  }
+
+  $('#fill-vehicle').addEventListener('change', updateFuelHint);
 
   function renderFills() {
     const rows = filteredFills();
@@ -880,7 +918,7 @@
   // Exports (les lignes affichées, triées par date croissante)
   // ---------------------------------------------------------
 
-  const EXPORT_HEADERS = ['Date', 'Immatriculation', 'Marque', 'Modèle', 'Moniteur',
+  const EXPORT_HEADERS = ['Date', 'Immatriculation', 'Marque', 'Modèle', 'Carburant', 'Moniteur',
     'Prix au litre (€)', 'Litres', 'Total HT (€)', 'Total TTC (€)', 'Kilométrage (km)', 'Conso (L/100 km)'];
 
   function exportRows() {
@@ -897,6 +935,7 @@
           immat: v.immat || '',
           marque: v.marque || '',
           modele: v.modele || '',
+          carburant: v.carburant || '',
           moniteur: m ? m.nom : '',
           prix: f.prix,
           litres: f.litres,
@@ -941,7 +980,7 @@
     const lines = [EXPORT_HEADERS.join(';')];
     rows.forEach((r) => {
       lines.push([
-        frDate(r.date), csvText(r.immat), csvText(r.marque), csvText(r.modele), csvText(r.moniteur),
+        frDate(r.date), csvText(r.immat), csvText(r.marque), csvText(r.modele), csvText(r.carburant), csvText(r.moniteur),
         csvNum(r.prix), csvNum(r.litres), csvNum(r.ht), csvNum(r.ttc), csvNum(r.km), csvNum(r.conso),
       ].join(';'));
     });
@@ -962,7 +1001,7 @@
     return Math.round((Date.UTC(y, m - 1, d) - Date.UTC(1899, 11, 30)) / 86400000);
   }
 
-  const COL_LETTERS = ['A', 'B', 'C', 'D', 'E', 'F', 'G', 'H', 'I', 'J', 'K'];
+  const COL_LETTERS = ['A', 'B', 'C', 'D', 'E', 'F', 'G', 'H', 'I', 'J', 'K', 'L'];
 
   function buildSheetXml(rows) {
     const cell = (col, row, xml) => `<c r="${COL_LETTERS[col]}${row}"${xml}</c>`;
@@ -977,7 +1016,7 @@
       '<worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main">' +
       '<sheetViews><sheetView workbookViewId="0"><pane ySplit="1" topLeftCell="A2" activePane="bottomLeft" state="frozen"/></sheetView></sheetViews>' +
       '<cols>' +
-      [12, 18, 15, 15, 18, 16, 10, 14, 14, 16, 16]
+      [12, 18, 15, 15, 12, 18, 16, 10, 14, 14, 16, 16]
         .map((w, i) => `<col min="${i + 1}" max="${i + 1}" width="${w}" customWidth="1"/>`)
         .join('') +
       '</cols><sheetData>';
@@ -992,13 +1031,14 @@
         str(1, rowNum, r.immat) +
         str(2, rowNum, r.marque) +
         str(3, rowNum, r.modele) +
-        str(4, rowNum, r.moniteur) +
-        num(5, rowNum, r.prix, 4) +   // 0.000
-        num(6, rowNum, r.litres, 3) + // 0.00
-        num(7, rowNum, r.ht, 3) +
-        num(8, rowNum, r.ttc, 3) +
-        num(9, rowNum, r.km) +
-        num(10, rowNum, r.conso, 3) +
+        str(4, rowNum, r.carburant) +
+        str(5, rowNum, r.moniteur) +
+        num(6, rowNum, r.prix, 4) +   // 0.000
+        num(7, rowNum, r.litres, 3) + // 0.00
+        num(8, rowNum, r.ht, 3) +
+        num(9, rowNum, r.ttc, 3) +
+        num(10, rowNum, r.km) +
+        num(11, rowNum, r.conso, 3) +
         '</row>';
     });
 

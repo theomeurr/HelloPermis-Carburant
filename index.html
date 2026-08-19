@@ -48,6 +48,7 @@
             <div class="field">
               <label for="fill-vehicle">Véhicule *</label>
               <select id="fill-vehicle" required></select>
+              <p class="field-hint hidden" id="veh-fuel-hint"></p>
             </div>
             <div class="field">
               <label for="fill-moniteur">Moniteur</label>
@@ -178,6 +179,18 @@
               <label for="veh-modele">Modèle *</label>
               <input type="text" id="veh-modele" placeholder="Clio 5" maxlength="40" required>
             </div>
+            <div class="field">
+              <label for="veh-carburant">Carburant *</label>
+              <select id="veh-carburant" required>
+                <option value="">— Choisir —</option>
+                <option>Gazole</option>
+                <option>SP95-E10</option>
+                <option>SP95</option>
+                <option>SP98</option>
+                <option>E85</option>
+                <option>GPL</option>
+              </select>
+            </div>
           </div>
           <div class="form-actions">
             <button type="submit" class="btn btn-primary" id="vehicle-submit">Ajouter le véhicule</button>
@@ -194,6 +207,7 @@
                 <th>Immatriculation</th>
                 <th>Marque</th>
                 <th>Modèle</th>
+                <th>Carburant</th>
                 <th class="num">Pleins</th>
                 <th class="num">Dernier km</th>
                 <th class="num" title="Consommation moyenne calculée entre le premier et le dernier plein">Conso moyenne</th>

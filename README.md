@@ -6,9 +6,10 @@ Aucune installation, aucun serveur : tout fonctionne directement dans le navigat
 ## Fonctionnalités
 
 ### 🚗 Véhicules
-- Ajout, modification et suppression des voitures : **immatriculation**, **marque**, **modèle**
+- Ajout, modification et suppression des voitures : **immatriculation**, **marque**, **modèle**, **type de carburant** (Gazole, SP95-E10, SP95, SP98, E85, GPL)
 - Détection des immatriculations en double
 - Par véhicule : nombre de pleins, dernier kilométrage, **consommation moyenne (L/100 km)** et **coût carburant par km**
+- Le carburant du véhicule sélectionné est **rappelé dans le formulaire de plein** (évite les erreurs à la pompe)
 
 ### 👤 Moniteurs
 - Base de moniteurs gérée directement dans l'application (ajout, renommage, suppression)
@@ -37,7 +38,7 @@ Avec en plus :
 ### 📥 Exports
 - **CSV** : séparateur `;` et décimales à virgule → s'ouvre parfaitement dans Excel français
 - **Excel (`.xlsx`)** : vrai fichier Excel avec dates et nombres typés, généré localement sans dépendance externe
-- Colonnes : date, immatriculation, marque, modèle, moniteur, prix au litre, litres, HT, TTC, kilométrage, consommation
+- Colonnes : date, immatriculation, marque, modèle, carburant, moniteur, prix au litre, litres, HT, TTC, kilométrage, consommation
 - L'export reprend les lignes affichées : filtrez par véhicule, moniteur ou mois pour exporter seulement une partie du suivi
 
 ### 💾 Sauvegarde / restauration
